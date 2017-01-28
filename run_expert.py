@@ -14,7 +14,7 @@ import load_policy
 def main():
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('input', type=str)
+    parser.add_argument('expert_policy_file', type=str)
     parser.add_argument('envname', type=str)
     parser.add_argument('--render', action='store_true')
     parser.add_argument('--num_rollouts', type=int, default=20,
@@ -23,7 +23,7 @@ def main():
     args = parser.parse_args()
 
     print('loading and building expert policy')
-    policy_fn = load_policy.load_policy(args.input)
+    policy_fn = load_policy.load_policy(args.expert_policy_file)
     print('loaded and built')
 
     with tf.Session():
@@ -31,6 +31,7 @@ def main():
 
         import gym
         env = gym.make(args.envname)
+        max_steps = env.spec.tags.get('wrapper_config.TimeLimit.max_episode_steps')
 
         returns = []
         observations = []
@@ -50,7 +51,7 @@ def main():
                 steps += 1
                 if args.render:
                     env.render()
-                if steps >= env.spec.tags.get('wrapper_config.TimeLimit.max_episode_steps'):
+                if steps >= max_steps:
                     break
             returns.append(totalr)
 
@@ -58,7 +59,8 @@ def main():
         print('mean return', np.mean(returns))
         print('std of return', np.std(returns))
 
-        expert_data = {'observations': np.array(observations), 'actions': np.array(actions)}
+        expert_data = {'observations': np.array(observations),
+                       'actions': np.array(actions)}
         with open(args.output_file, 'wb') as f:
             data = pickle.dump(expert_data, f)
 
