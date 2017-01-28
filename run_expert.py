@@ -1,7 +1,7 @@
 """
 Code to load an expert policy and save out data for behavioral cloning.
 Example usage:
-    python run_expert.py humanoid.pkl Humanoid-v1 --render \
+    python run_expert.py experts/humanoid.pkl Humanoid-v1 --render \
             --output_file expert_data.pkl --num_rollouts 20
 """
 
