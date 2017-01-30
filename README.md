@@ -7,3 +7,4 @@ The only file that you need to look at is `run_expert.py`, which is code to load
 In `experts/`, the provided expert policies are:
 * humanoid.pkl, corresponding to Humanoid-v1 environment
 
+More expert policies coming soon.
