@@ -1,14 +1,19 @@
+#!/usr/bin/env python
+
 """
 Code to load an expert policy and save out data for behavioral cloning.
 Example usage:
     python run_expert.py experts/humanoid.pkl Humanoid-v1 --render \
             --output_file expert_data.pkl --num_rollouts 20
+
+Author of this script and included expert policies: Jonathan Ho (hoj@openai.com)
 """
 
 import pickle
 import tensorflow as tf
 import numpy as np
 import tf_util
+import gym
 import load_policy
 
 def main():
@@ -17,9 +22,9 @@ def main():
     parser.add_argument('expert_policy_file', type=str)
     parser.add_argument('envname', type=str)
     parser.add_argument('--render', action='store_true')
+    parser.add_argument("--max_timesteps", type=int)
     parser.add_argument('--num_rollouts', type=int, default=20,
                         help='Number of expert roll outs')
-    parser.add_argument('--output_file', type=str, default='expert_data.pkl')
     args = parser.parse_args()
 
     print('loading and building expert policy')
@@ -31,7 +36,7 @@ def main():
 
         import gym
         env = gym.make(args.envname)
-        max_steps = env.spec.tags.get('wrapper_config.TimeLimit.max_episode_steps')
+        max_steps = args.max_timesteps or env.spec.timestep_limit
 
         returns = []
         observations = []
@@ -51,6 +56,7 @@ def main():
                 steps += 1
                 if args.render:
                     env.render()
+                if steps % 100 == 0: print("%i/%i"%(steps, max_steps))
                 if steps >= max_steps:
                     break
             returns.append(totalr)
@@ -61,8 +67,6 @@ def main():
 
         expert_data = {'observations': np.array(observations),
                        'actions': np.array(actions)}
-        with open(args.output_file, 'wb') as f:
-            data = pickle.dump(expert_data, f)
 
 if __name__ == '__main__':
     main()
