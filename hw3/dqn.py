@@ -144,16 +144,6 @@ def learn(env,
         update_target_fn.append(var_target.assign(var))
     update_target_fn = tf.group(*update_target_fn)
 
-    # exponentially average various statistics we wish to log.
-    avg_vars, apply_averages = compute_exponential_averages(
-            [tf.reduce_mean(errors), tf.reduce_mean(q_t_selected)],
-            decay=0.999
-    )
-    grad_vars = [v for v in q_func_vars if "weights" in v.name]
-    grad_avg_vars, apply_grad_averages = compute_exponential_averages(
-            [tf.reduce_mean(tf.square(v)) for v in grad_vars], decay=0.999)
-    apply_averages = tf.group(apply_averages, apply_grad_averages)
-
     # construct the replay buffer
     replay_buffer = ReplayBuffer(replay_buffer_size, frame_history_len)
 
@@ -257,7 +247,7 @@ def learn(env,
             # YOUR CODE HERE
 
             #####
-           
+
         ### 4. Log progress
         episode_rewards = get_wrapper_by_name(env, "Monitor").get_episode_rewards()
         if len(episode_rewards) > 0:
@@ -265,14 +255,9 @@ def learn(env,
         if len(episode_rewards) > 100:
             best_mean_episode_reward = max(best_mean_episode_reward, mean_episode_reward)
         if t % LOG_EVERY_N_STEPS == 0 and model_initialized:
-            current_avg_error, current_avg_q = session.run(avg_vars)
-            current_grad_norms = session.run(grad_avg_vars)
-
             print("Timestep %d" % (t,))
             print("mean reward (100 episodes) %f" % mean_episode_reward)
             print("best mean reward %f" % best_mean_episode_reward)
-            print("avg Bellman error %f" % current_avg_error)
-            print("avg Q for selected %f" % current_avg_q)
             print("episodes %d" % len(episode_rewards))
             print("exploration %f" % exploration.value(t))
             print("learning_rate %f" % optimizer_spec.lr_schedule.value(t))

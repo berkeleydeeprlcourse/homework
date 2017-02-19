@@ -164,7 +164,7 @@ def initialize_interdependent_variables(session, vars_list, feed_dict):
 def get_wrapper_by_name(env, classname):
     currentenv = env
     while True:
-        if classname == currentenv.__class__.__name__:
+        if classname in currentenv.__class__.__name__:
             return currentenv
         elif isinstance(env, gym.Wrapper):
             currentenv = currentenv.env
