@@ -10,14 +10,13 @@ The code computes some useful diagnostics, which you may find helpful to look at
 
 Software dependencies: 
 
-- tensorflow (I'm using 0.10.0)
+- tensorflow
 - numpy + scipy (Anaconda recommended)
 - gym (I'm using 0.8.0, `pip install gym==0.8.0`, but old versions should work just as well)
 
-
 ## Problem 1
 
-Write a new function, `main_pendulum` that learns on the gym environment Pendulum-v0, which has a continuous action space. In `main_cartpole`, note that the neural network outputs "logits" (i.e., log-probabilities plus-or-minus a constant) that specify a categorical distribution. On the other hand, for the pendulum task, your neural network should output the mean of a Gaussian distribution, a separate parameter vector to parameterize the log standard deviation. For example, you could use the following code:
+Here you will modify the `main_cartpole` policy gradient implementation to work on a continuous action space, specifically, the gym environment `Pendulum-v`. Note that in `main_cartpole`, note that the neural network outputs "logits" (i.e., log-probabilities plus-or-minus a constant) that specify a categorical distribution. On the other hand, for the pendulum task, your neural network should output the mean of a Gaussian distribution, a separate parameter vector to parameterize the log standard deviation. For example, you could use the following code:
 
 ```python
 
@@ -29,13 +28,15 @@ Write a new function, `main_pendulum` that learns on the gym environment Pendulu
 
 ```
 
-You should also compute differential entropy (replacing `sy_ent`) and KL-divergence (`sy_kl`) for the Gaussian distribution, though these are only used as diagnostics--they are not used by the algorithm.
+You should also compute differential entropy (replacing `sy_ent`) and KL-divergence (`sy_kl`) for the Gaussian distribution. 
+
+The pendulum problem is slightly harder, and using a fixed stepsize does not work reliably---thus, we instead recommend using an adaptive stepsize, where you adjust it based on the KL divergence between the new and old policy. Code for this stepsize adaptation is provided.
 
 You can plot your results using the script `plot_learning_curves.py` or your own plotting code.
 
 **Deliverables**
 
-- Show a plot with the pendulum converging to EpRewMean of about 200. Include EpRewMean, KL, Entropy in your plots.  
+- Show a plot with the pendulum converging to EpRewMean of at least `-300`. Include EpRewMean, KL, Entropy in your plots.  
 - Describe the hyperparameters used and how many timesteps your algorithm took to learn.
 
 ## Problem 2

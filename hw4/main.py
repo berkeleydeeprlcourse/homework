@@ -20,7 +20,7 @@ def dense(x, size, name, weight_init=None):
     Dense (fully connected) layer
     """
     w = tf.get_variable(name + "/w", [x.get_shape()[1], size], initializer=weight_init)
-    b = tf.get_variable(name + "/b", [size], initializer=tf.zeros_initializer)
+    b = tf.get_variable(name + "/b", [size], initializer=tf.zeros_initializer())
     return tf.matmul(x, w) + b
 
 def fancy_slice_2d(X, inds0, inds1):
@@ -84,6 +84,16 @@ class LinearValueFunction(object):
     def preproc(self, X):
         return np.concatenate([np.ones([X.shape[0], 1]), X, np.square(X)/2.0], axis=1)
 
+class NnValueFunction(object):
+    pass # YOUR CODE HERE
+
+def lrelu(x, leak=0.2):
+    f1 = 0.5 * (1 + leak)
+    f2 = 0.5 * (1 - leak)
+    return f1 * x + f2 * abs(x)
+
+
+
 def main_cartpole(n_iter=100, gamma=1.0, min_timesteps_per_batch=1000, stepsize=1e-2, animate=True, logdir=None):
     env = gym.make("CartPole-v0")
     ob_dim = env.observation_space.shape[0]
@@ -96,7 +106,7 @@ def main_cartpole(n_iter=100, gamma=1.0, min_timesteps_per_batch=1000, stepsize=
     sy_ob_no = tf.placeholder(shape=[None, ob_dim], name="ob", dtype=tf.float32) # batch of observations
     sy_ac_n = tf.placeholder(shape=[None], name="ac", dtype=tf.int32) # batch of actions taken by the policy, used for policy gradient computation
     sy_adv_n = tf.placeholder(shape=[None], name="adv", dtype=tf.float32) # advantage function estimate
-    sy_h1 = tf.nn.relu(dense(sy_ob_no, 32, "h1", weight_init=normc_initializer(1.0))) # hidden layer
+    sy_h1 = lrelu(dense(sy_ob_no, 32, "h1", weight_init=normc_initializer(1.0))) # hidden layer
     sy_logits_na = dense(sy_h1, num_actions, "final", weight_init=normc_initializer(0.05)) # "logits", describing probability distribution of final layer
     # we use a small initialization for the last layer, so the initial policy has maximal entropy
     sy_oldlogits_na = tf.placeholder(shape=[None, num_actions], name='oldlogits', dtype=tf.float32) # logits BEFORE update (just used for KL diagnostic)
@@ -116,11 +126,14 @@ def main_cartpole(n_iter=100, gamma=1.0, min_timesteps_per_batch=1000, stepsize=
     sy_surr = - tf.reduce_mean(sy_adv_n * sy_logprob_n) # Loss function that we'll differentiate to get the policy gradient ("surr" is for "surrogate loss")
 
     sy_stepsize = tf.placeholder(shape=[], dtype=tf.float32) # Symbolic, in case you want to change the stepsize during optimization. (We're not doing that currently)
-    update_op = tf.train.AdamOptimizer(stepsize).minimize(sy_surr)
+    update_op = tf.train.AdamOptimizer(sy_stepsize).minimize(sy_surr)
 
-    sess = tf.Session()
+    tf_config = tf.ConfigProto(inter_op_parallelism_threads=1, intra_op_parallelism_threads=1) 
+    # use single thread. on such a small problem, multithreading gives you a slowdown
+    # this way, we can better use multiple cores for different experiments
+    sess = tf.Session(config=tf_config)
     sess.__enter__() # equivalent to `with sess:`
-    tf.initialize_all_variables().run() #pylint: disable=E1101
+    tf.global_variables_initializer().run() #pylint: disable=E1101
 
     total_timesteps = 0
 
@@ -188,13 +201,78 @@ def main_cartpole(n_iter=100, gamma=1.0, min_timesteps_per_batch=1000, stepsize=
         # Note that we fit value function AFTER using it to compute the advantage function to avoid introducing bias
         logz.dump_tabular()
 
-def main_pendulum(n_iter=100, gamma=1.0, min_timesteps_per_batch=1000, stepsize=1e-2, animate=True, logdir=None):
+def main_pendulum(logdir, seed, n_iter, gamma, min_timesteps_per_batch, initial_stepsize, desired_kl, vf_type, vf_params, animate=False):
+    tf.set_random_seed(seed)
+    np.random.seed(seed)
     env = gym.make("Pendulum-v0")
     ob_dim = env.observation_space.shape[0]
     ac_dim = env.action_space.shape[0]
+    logz.configure_output_dir(logdir)
+    if vf_type == 'linear':
+        vf = LinearValueFunction(**vf_params)
+    elif vf_type == 'nn':
+        vf = NnValueFunction(ob_dim=ob_dim, **vf_params)
+
 
     YOUR_CODE_HERE
 
 
+    sy_surr = - tf.reduce_mean(sy_adv_n * sy_logprob_n) # Loss function that we'll differentiate to get the policy gradient ("surr" is for "surrogate loss")
+
+    sy_stepsize = tf.placeholder(shape=[], dtype=tf.float32) # Symbolic, in case you want to change the stepsize during optimization. (We're not doing that currently)
+    update_op = tf.train.AdamOptimizer(sy_stepsize).minimize(sy_surr)
+
+    sess = tf.Session()
+    sess.__enter__() # equivalent to `with sess:`
+    tf.global_variables_initializer().run() #pylint: disable=E1101
+
+    total_timesteps = 0
+    stepsize = initial_stepsize
+
+    for i in range(n_iter):
+        print("********** Iteration %i ************"%i)
+
+        YOUR_CODE_HERE
+
+        if kl > desired_kl * 2: 
+            stepsize /= 1.5
+            print('stepsize -> %s'%stepsize)
+        elif kl < desired_kl / 2: 
+            stepsize *= 1.5
+            print('stepsize -> %s'%stepsize)
+        else:
+            print('stepsize OK')
+
+
+        # Log diagnostics
+        logz.log_tabular("EpRewMean", np.mean([path["reward"].sum() for path in paths]))
+        logz.log_tabular("EpLenMean", np.mean([pathlength(path) for path in paths]))
+        logz.log_tabular("KLOldNew", kl)
+        logz.log_tabular("Entropy", ent)
+        logz.log_tabular("EVBefore", explained_variance_1d(vpred_n, vtarg_n))
+        logz.log_tabular("EVAfter", explained_variance_1d(vf.predict(ob_no), vtarg_n))
+        logz.log_tabular("TimestepsSoFar", total_timesteps)
+        # If you're overfitting, EVAfter will be way larger than EVBefore.
+        # Note that we fit value function AFTER using it to compute the advantage function to avoid introducing bias
+        logz.dump_tabular()
+
+
+def main_pendulum1(d):
+    return main_pendulum(**d)
+
 if __name__ == "__main__":
-    main_cartpole(logdir=None) # when you want to start collecting results, set the logdir
+    if 1:
+        main_cartpole(logdir=None) # when you want to start collecting results, set the logdir
+    if 0:
+        general_params = dict(gamma=0.97, animate=False, min_timesteps_per_batch=2500, n_iter=300, initial_stepsize=1e-3)
+        params = [
+            dict(logdir='/tmp/ref/linearvf-kl2e-3-seed0', seed=0, desired_kl=2e-3, vf_type='linear', vf_params={}, **general_params),
+            dict(logdir='/tmp/ref/nnvf-kl2e-3-seed0', seed=0, desired_kl=2e-3, vf_type='nn', vf_params=dict(n_epochs=10, stepsize=1e-3), **general_params),
+            dict(logdir='/tmp/ref/linearvf-kl2e-3-seed1', seed=1, desired_kl=2e-3, vf_type='linear', vf_params={}, **general_params),
+            dict(logdir='/tmp/ref/nnvf-kl2e-3-seed1', seed=1, desired_kl=2e-3, vf_type='nn', vf_params=dict(n_epochs=10, stepsize=1e-3), **general_params),
+            dict(logdir='/tmp/ref/linearvf-kl2e-3-seed2', seed=2, desired_kl=2e-3, vf_type='linear', vf_params={}, **general_params),
+            dict(logdir='/tmp/ref/nnvf-kl2e-3-seed2', seed=2, desired_kl=2e-3, vf_type='nn', vf_params=dict(n_epochs=10, stepsize=1e-3), **general_params),
+        ]
+        import multiprocessing
+        p = multiprocessing.Pool()
+        p.map(main_pendulum1, params)
