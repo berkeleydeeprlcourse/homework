@@ -20,7 +20,7 @@ class SmallReactivePolicy:
         return x
 
 def get_env_and_policy():
-    env = gym.make("RoboschoolWalker2d-v0")
+    env = gym.make("RoboschoolWalker2d-v1")
     pi = SmallReactivePolicy(env.observation_space, env.action_space)
     return env, pi
 
