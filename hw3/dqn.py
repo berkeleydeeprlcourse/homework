@@ -128,7 +128,17 @@ def learn(env,
     ######
     
     # YOUR CODE HERE
+    q_t = q_func(obs_t_float, num_actions, scope="q_func", reuse=False)
+    greedy_action = tf.argmax(q_t, axis=1)
 
+    q_tp1 = q_func(obs_tp1_float, num_actions, scope="target_q_func", reuse=False)
+    target = rew_t_ph + (1.0 - done_mask_ph) * gamma * tf.reduce_max(q_tp1, axis=1)
+    q_t_act = tf.reduce_sum(q_t * tf.one_hot(act_t_ph, num_actions), axis=1)
+    total_error = tf.losses.mean_squared_error(target, q_t_act)
+    
+    q_func_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='q_func')
+    target_q_func_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='target_q_func')
+    
     ######
 
     # construct optimization op (with gradient clipping)
@@ -195,6 +205,20 @@ def learn(env,
         #####
         
         # YOUR CODE HERE
+        replay_buffer.store_frame(last_obs)
+
+        if not model_initialized or random.random() < exploration.value(t):
+            action = random.randint(0, num_actions - 1)
+        else:
+            q_now = np.expand_dims(replay_buffer.encode_recent_observation(), axis=0)
+            action = session.run(greedy_action, {obs_t_float: q_now})
+        
+        next_obs, reward, done, _ = env.step(action)
+        if done:
+            last_obs = env.reset()
+
+        replay_buffer.store_effect(action, reward, done)
+        last_obs = next_obs
 
         #####
 
@@ -245,7 +269,28 @@ def learn(env,
             #####
             
             # YOUR CODE HERE
+            obs_batch, act_batch, rew_batch, obs_tp1_batch, done_batch = replay_buffer.sample(batch_size)
+            
+            if not model_initialized:
+                initialize_interdependent_variables(session, tf.global_variables(), {
+                    obs_t_ph: obs_batch,
+                    obs_tp1_ph: obs_tp1_batch,
+                })
+                model_initialized = True
+            
+            session.run(train_fn, {
+                obs_t_ph: obs_batch,
+                act_t_ph: act_batch,
+                rew_t_ph: rew_batch,
+                obs_tp1_ph: obs_tp1_batch,
+                done_mask_ph: done_batch,
+                learning_rate: optimizer_spec.lr_schedule.value(t),
+            })
 
+            num_param_updates += 1
+            if num_param_updates % target_update_freq == 0:
+                session.run(update_target_fn)
+            
             #####
 
         ### 4. Log progress

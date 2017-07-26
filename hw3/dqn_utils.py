@@ -183,7 +183,7 @@ class ReplayBuffer(object):
               time)
             - store frame_t and frame_(t+1) in the same buffer.
 
-        For the tipical use case in Atari Deep RL buffer with 1M frames the total
+        For the typical use case in Atari Deep RL buffer with 1M frames the total
         memory footprint of this buffer is 10^6 * 84 * 84 bytes ~= 7 gigabytes
 
         Warning! Assumes that returning frame of zeros at the beginning
@@ -262,7 +262,6 @@ class ReplayBuffer(object):
 
     def encode_recent_observation(self):
         """Return the most recent `frame_history_len` frames.
-
         Returns
         -------
         observation: np.array
@@ -271,7 +270,7 @@ class ReplayBuffer(object):
             encodes frame at time `t - frame_history_len + i`
         """
         assert self.num_in_buffer > 0
-        return self._encode_observation((self.next_idx - 1) % self.size)
+        return self._encode_observation(self.next_idx % self.size)
 
     def _encode_observation(self, idx):
         end_idx   = idx + 1 # make noninclusive
@@ -308,11 +307,6 @@ class ReplayBuffer(object):
         frame: np.array
             Array of shape (img_h, img_w, img_c) and dtype np.uint8
             the frame to be stored
-
-        Returns
-        -------
-        idx: int
-            Index at which the frame is stored. To be used for `store_effect` later.
         """
         if self.obs is None:
             self.obs      = np.empty([self.size] + list(frame.shape), dtype=np.uint8)
@@ -321,13 +315,10 @@ class ReplayBuffer(object):
             self.done     = np.empty([self.size],                     dtype=np.bool)
         self.obs[self.next_idx] = frame
 
-        ret = self.next_idx
-        self.next_idx = (self.next_idx + 1) % self.size
-        self.num_in_buffer = min(self.size, self.num_in_buffer + 1)
+        if self.num_in_buffer < self.size:
+            self.num_in_buffer += 1
 
-        return ret
-
-    def store_effect(self, idx, action, reward, done):
+    def store_effect(self, action, reward, done):
         """Store effects of action taken after obeserving frame stored
         at index idx. The reason `store_frame` and `store_effect` is broken
         up into two functions is so that once can call `encode_recent_observation`
@@ -335,8 +326,6 @@ class ReplayBuffer(object):
 
         Paramters
         ---------
-        idx: int
-            Index in buffer of recently observed frame (returned by `store_frame`).
         action: int
             Action that was performed upon observing this frame.
         reward: float
@@ -344,7 +333,8 @@ class ReplayBuffer(object):
         done: bool
             True if episode was finished after performing that action.
         """
-        self.action[idx] = action
-        self.reward[idx] = reward
-        self.done[idx]   = done
+        self.action[self.next_idx] = action
+        self.reward[self.next_idx] = reward
+        self.done[self.next_idx]   = done
+        self.next_idx = (self.next_idx + 1) % self.size
 
