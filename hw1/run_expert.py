@@ -3,7 +3,7 @@
 """
 Code to load an expert policy and generate roll-out data for behavioral cloning.
 Example usage:
-    python run_expert.py experts/Hopper-v1.pkl Hopper-v1 --render --num_rollouts 20
+    python run_expert.py experts/Hopper-v1.pkl Hopper-v1 --num_rollouts 20 --expert_data_filename expert_data/expert_data_hopper.pkl
 
 Author of this script and included expert policies: Jonathan Ho (hoj@openai.com)
 """
@@ -17,7 +17,7 @@ import load_policy
 
 from pickle_util import save_obj
 
-def main(expert_policy_file, envname, num_rollouts, max_timesteps=None, render=False, save_filename='expert_data.pkl'):
+def main(expert_policy_file, envname, num_rollouts, expert_data_filename, max_timesteps=None, render=False):
     print('loading and building expert policy')
     policy_fn = load_policy.load_policy(expert_policy_file)
     print('loaded and built')
@@ -58,17 +58,22 @@ def main(expert_policy_file, envname, num_rollouts, max_timesteps=None, render=F
         expert_data = {'observations': np.array(observations),
                        'actions': np.array(actions)}
 
-        save_obj(expert_data, save_filename)
+        save_obj(expert_data, expert_data_filename)
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('expert_policy_file', type=str)
-    parser.add_argument('envname', type=str)
-    parser.add_argument('--render', action='store_true')
-    parser.add_argument('--max_timesteps', type=int)
-    parser.add_argument('--num_rollouts', type=int, default=20,
-                        help='Number of expert roll outs')
-    args = parser.parse_args()
+  parser = argparse.ArgumentParser()
+  parser.add_argument('expert_policy_file', type=str)
+  parser.add_argument('envname', type=str)
+  parser.add_argument('--expert_data_filename', type=str)
+  parser.add_argument('--render', action='store_true')
+  parser.add_argument('--max_timesteps', type=int)
+  parser.add_argument('--num_rollouts', type=int, default=20, help='Number of expert roll outs')
+  args = parser.parse_args()
 
-    main(args.expert_policy_file, args.envname, args.num_rollouts, args.max_timesteps, args.render)
+  main(args.expert_policy_file, 
+       args.envname, 
+       args.num_rollouts, 
+       args.expert_data_filename,
+       args.max_timesteps, 
+       args.render)
