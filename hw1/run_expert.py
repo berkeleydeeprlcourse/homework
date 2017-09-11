@@ -17,7 +17,7 @@ import load_policy
 
 from pickle_util import save_obj
 
-def main(expert_policy_file, envname, num_rollouts, expert_data_filename, max_timesteps=None, render=False):
+def main(expert_policy_file, envname, num_rollouts, expert_data_filename=None, max_timesteps=None, render=False):
     print('loading and building expert policy')
     policy_fn = load_policy.load_policy(expert_policy_file)
     print('loaded and built')
@@ -58,7 +58,8 @@ def main(expert_policy_file, envname, num_rollouts, expert_data_filename, max_ti
         expert_data = {'observations': np.array(observations),
                        'actions': np.array(actions)}
 
-        save_obj(expert_data, expert_data_filename)
+        if expert_data_filename:
+            save_obj(expert_data, expert_data_filename)
 
 
 if __name__ == '__main__':
