@@ -13,7 +13,7 @@ import tensorflow as tf
 
 from behavioral_cloning import feedforward_nn, DEFAULT_HIDDEN_LAYER_SIZE
 
-def main(model_filepath, hidden_layer_size, envname, num_rollouts, max_timesteps=None, render=False):
+def main(model_filepath, envname, num_rollouts, hidden_layer_size=DEFAULT_HIDDEN_LAYER_SIZE, max_timesteps=None, render=False):
     env = gym.make(envname)
 
     # TODO nthomas - note that this won't work for input tensors, only input vectors.
@@ -75,8 +75,8 @@ if __name__ == '__main__':
   args = parser.parse_args()
 
   main(args.model_filepath,
-       args.hidden_layer_size,
        args.envname,
+       args.hidden_layer_size,
        args.num_rollouts,
        args.max_timesteps,
        args.render)
