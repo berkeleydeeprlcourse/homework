@@ -111,7 +111,12 @@ if __name__ == '__main__':
   parser.add_argument('--expert_data_filename', type=str)
   parser.add_argument('--model_filepath', type=str)
   parser.add_argument('--hidden_layer_size', type=int, default=DEFAULT_HIDDEN_LAYER_SIZE)
+  parser.add_argument('--training_steps', type=int, default=DEFAULT_TRAINING_STEPS)
   args = parser.parse_args()
 
-  main(args.expert_data_filename, args.envname, args.model_filepath, hidden_layer_size=args.hidden_layer_size)
+  main(args.expert_data_filename,
+       args.envname,
+       args.model_filepath,
+       training_steps=DEFAULT_TRAINING_STEPS,
+       hidden_layer_size=args.hidden_layer_size)
 
