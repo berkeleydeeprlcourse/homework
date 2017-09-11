@@ -3,26 +3,23 @@ from __future__ import division
 from __future__ import print_function
 
 import numpy as np
-import pickle
 import tensorflow as tf
 
-HIDDEN_SIZE = 64
-OBSERVATION_SIZE = 11
-ACTION_SIZE = 3
+from pickle_util import load_obj
 
-def feedforward_nn(x):
+def feedforward_nn(x, observation_size, output_size, hidden_size=64):
   # x is of size OBSERVATION_SIZE
 
   # fully connected input layer
   with tf.name_scope('fc1'):
-    W_fc1 = tf.Variable(tf.random_normal([OBSERVATION_SIZE, HIDDEN_SIZE], stddev=0.1))
-    b_fc1 = tf.Variable(tf.zeros([HIDDEN_SIZE]))
+    W_fc1 = tf.Variable(tf.random_normal([observation_size, hidden_size], stddev=0.1))
+    b_fc1 = tf.Variable(tf.zeros([hidden_size]))
     h_fc1 = tf.nn.relu(tf.matmul(x, W_fc1) + b_fc1)
   
   # fully connected output layer
   with tf.name_scope('fc2'):
-    W_fc2 = tf.Variable(tf.random_normal([HIDDEN_SIZE, ACTION_SIZE], stddev=0.1))
-    b_fc2 = tf.Variable(tf.zeros([ACTION_SIZE]))
+    W_fc2 = tf.Variable(tf.random_normal([hidden_size, output_size], stddev=0.1))
+    b_fc2 = tf.Variable(tf.zeros([output_size]))
     y = tf.matmul(h_fc1, W_fc2) + b_fc2
 
   return y
@@ -43,12 +40,15 @@ def main(_):
   observations = import_observations()
   actions = import_actions()
 
+  observation_size = len(observations[0])
+  action_size = len(actions[0])
+
   # Create the model
-  x = tf.placeholder(tf.float32, [None, OBSERVATION_SIZE])
-  y = feedforward_nn(x)
+  x = tf.placeholder(tf.float32, [None, observation_size])
+  y = feedforward_nn(x, observation_size, action_size)
 
   # Define loss and optimizer
-  y_ = tf.placeholder(tf.float32, [None, ACTION_SIZE])
+  y_ = tf.placeholder(tf.float32, [None, action_size])
 
   l2_loss = tf.nn.l2_loss(y_ - y)
   train_step = tf.train.GradientDescentOptimizer(0.000005).minimize(l2_loss)
@@ -75,14 +75,6 @@ def main(_):
   plt.ylabel('training accuracy')
   plt.xlabel('training steps')
   plt.show()
-
-def save_obj(obj, filename):
-    with open(filename, 'wb') as f:
-        pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
-
-def load_obj(filename):
-    with open(filename, 'rb') as f:
-        return pickle.load(f)
 
 if __name__ == '__main__':
   tf.app.run(main=main)

@@ -9,12 +9,13 @@ Example usage:
 Author of this script and included expert policies: Jonathan Ho (hoj@openai.com)
 """
 
-import pickle
 import tensorflow as tf
 import numpy as np
 import tf_util
 import gym
 import load_policy
+
+from pickle_util import save_obj
 
 def main():
     import argparse
@@ -69,14 +70,6 @@ def main():
 
         save_obj(expert_data, 'expert_data.pkl')
 
-
-def save_obj(obj, filename):
-    with open(filename, 'wb') as f:
-        pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
-
-def load_obj(filename):
-    with open(filename, 'rb') as f:
-        return pickle.load(f)
 
 if __name__ == '__main__':
     main()
