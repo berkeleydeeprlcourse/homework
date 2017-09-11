@@ -21,6 +21,7 @@ BATCH_SIZE = 1000
 TRAINING_STEPS = 10000
 
 # for some reason tensorflow needs me to do this
+# TODO nthomas figure out better ways to pass arguments into network training code
 EXPERT_DATA_FILENAME = None
 ENVNAME = None
 HIDDEN_LAYER_SIZE = None
@@ -33,7 +34,7 @@ def feedforward_nn(x, observation_size, output_size, hidden_size):
     W_fc1 = tf.Variable(tf.random_normal([observation_size, hidden_size], stddev=0.1))
     b_fc1 = tf.Variable(tf.zeros([hidden_size]))
     h_fc1 = tf.nn.relu(tf.matmul(x, W_fc1) + b_fc1)
-  
+
   # fully connected output layer
   with tf.name_scope('fc2'):
     W_fc2 = tf.Variable(tf.random_normal([hidden_size, output_size], stddev=0.1))
@@ -85,9 +86,9 @@ def main(_):
       if i % 100 == 0:
         print('step %d, training accuracy %g' % (i, train_accuracy))
       train_step.run(feed_dict={x: batch_xs, y_: batch_ys})
-    
+
     # save the trained model parameters
-    
+
     saver = tf.train.Saver()
     saver.save(sess, MODEL_FILEPATH)
 
@@ -115,4 +116,4 @@ if __name__ == '__main__':
   MODEL_FILEPATH = args.model_filepath
   HIDDEN_LAYER_SIZE = args.hidden_layer_size
   tf.app.run(main=main)
-  
+
