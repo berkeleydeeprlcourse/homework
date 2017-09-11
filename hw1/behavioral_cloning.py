@@ -15,16 +15,10 @@ import tensorflow as tf
 from pickle_util import load_obj, save_obj
 
 # hyperparameters
-GRADIENT_DESCENT_STEP_SIZE = 0.000005
+DEFAULT_GRADIENT_DESCENT_STEP_SIZE = 0.000005
 DEFAULT_HIDDEN_LAYER_SIZE = 64
-BATCH_SIZE = 1000
-TRAINING_STEPS = 10000
-
-# for some reason tensorflow needs me to do this
-# TODO nthomas figure out better ways to pass arguments into network training code
-EXPERT_DATA_FILENAME = None
-ENVNAME = None
-HIDDEN_LAYER_SIZE = None
+DEFAULT_BATCH_SIZE = 1000
+DEFAULT_TRAINING_STEPS = 10000
 
 def feedforward_nn(x, observation_size, output_size, hidden_size):
   # x is of size OBSERVATION_SIZE
@@ -54,31 +48,37 @@ def import_actions(expert_data_filename):
   # we have to flatten the array, because they are column vectors for some reason
   return np.array([v.flatten() for v in actions])
 
-def main(_):
+def main(expert_data_filename,
+         envname,
+         model_filepath,
+         hidden_layer_size=DEFAULT_HIDDEN_LAYER_SIZE,
+         batch_size=DEFAULT_BATCH_SIZE,
+         training_steps=DEFAULT_TRAINING_STEPS,
+         gradient_descent_step_size=DEFAULT_GRADIENT_DESCENT_STEP_SIZE):
   # Import data
-  observations = import_observations(EXPERT_DATA_FILENAME)
-  actions = import_actions(EXPERT_DATA_FILENAME)
+  observations = import_observations(expert_data_filename)
+  actions = import_actions(expert_data_filename)
 
   observation_size = len(observations[0])
   action_size = len(actions[0])
 
   # Create the model
   x = tf.placeholder(tf.float32, [None, observation_size])
-  y = feedforward_nn(x, observation_size, action_size, HIDDEN_LAYER_SIZE)
+  y = feedforward_nn(x, observation_size, action_size, hidden_layer_size)
 
   # Define loss and optimizer
   y_ = tf.placeholder(tf.float32, [None, action_size])
 
   l2_loss = tf.nn.l2_loss(y_ - y)
-  train_step = tf.train.GradientDescentOptimizer(GRADIENT_DESCENT_STEP_SIZE).minimize(l2_loss)
+  train_step = tf.train.GradientDescentOptimizer(gradient_descent_step_size).minimize(l2_loss)
 
   # Train
-  train_accuracies = np.zeros([TRAINING_STEPS])
+  train_accuracies = np.zeros([training_steps])
 
   with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
-    for i in range(TRAINING_STEPS):
-      indexes = np.random.choice(observations.shape[0], BATCH_SIZE, replace=False)
+    for i in range(training_steps):
+      indexes = np.random.choice(observations.shape[0], batch_size, replace=False)
       batch_xs = observations[indexes, :]
       batch_ys = actions[indexes, :]
       train_accuracy = l2_loss.eval(feed_dict={x: batch_xs, y_: batch_ys})
@@ -90,17 +90,17 @@ def main(_):
     # save the trained model parameters
 
     saver = tf.train.Saver()
-    saver.save(sess, MODEL_FILEPATH)
+    saver.save(sess, model_filepath)
 
-  save_obj(train_accuracies, 'training_accuracies/training_accuracies_{}.pkl'.format(ENVNAME))
-  plot_and_save_figure(train_accuracies)
+  save_obj(train_accuracies, 'training_accuracies/training_accuracies_{}.pkl'.format(envname))
+  plot_and_save_figure(train_accuracies, envname)
 
 
-def plot_and_save_figure(train_accuracies):
+def plot_and_save_figure(train_accuracies, envname):
   plt.plot(train_accuracies)
   plt.ylabel('training accuracy')
   plt.xlabel('training steps')
-  plt.savefig('training_accuracies/training_accuracies_' + ENVNAME)
+  plt.savefig('training_accuracies/training_accuracies_' + envname)
 
 
 if __name__ == '__main__':
@@ -111,9 +111,5 @@ if __name__ == '__main__':
   parser.add_argument('--hidden_layer_size', type=int, default=DEFAULT_HIDDEN_LAYER_SIZE)
   args = parser.parse_args()
 
-  ENVNAME = args.envname
-  EXPERT_DATA_FILENAME = args.expert_data_filename
-  MODEL_FILEPATH = args.model_filepath
-  HIDDEN_LAYER_SIZE = args.hidden_layer_size
-  tf.app.run(main=main)
+  main(args.expert_data_filename, args.envname, args.model_filepath, hidden_layer_size=args.hidden_layer_size)
 
