@@ -57,10 +57,11 @@ def main(model_filepath, hidden_layer_size, envname, num_rollouts, max_timesteps
         print('mean return', np.mean(returns))
         print('std of return', np.std(returns))
 
-        expert_data = {'observations': np.array(observations),
-                       'actions': np.array(actions)}
-        print(len(expert_data))
+        # policy observed states
+        # policy_observed_data = {'observations': np.array(observations),
+        #                         'actions': np.array(actions)}
         # save_obj(expert_data, expert_data_filename)
+    return returns
 
 
 if __name__ == '__main__':

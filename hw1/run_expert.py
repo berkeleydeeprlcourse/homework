@@ -17,7 +17,12 @@ import load_policy
 
 from pickle_util import save_obj
 
-def main(expert_policy_file, envname, num_rollouts, expert_data_filename=None, max_timesteps=None, render=False):
+def main(expert_policy_file,
+         envname,
+         num_rollouts,
+         expert_data_filename=None,
+         max_timesteps=None,
+         render=False):
     print('loading and building expert policy')
     policy_fn = load_policy.load_policy(expert_policy_file)
     print('loaded and built')
@@ -61,6 +66,7 @@ def main(expert_policy_file, envname, num_rollouts, expert_data_filename=None, m
         if expert_data_filename:
             save_obj(expert_data, expert_data_filename)
 
+    return returns
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
@@ -72,9 +78,9 @@ if __name__ == '__main__':
   parser.add_argument('--num_rollouts', type=int, default=20, help='Number of expert roll outs')
   args = parser.parse_args()
 
-  main(args.expert_policy_file, 
-       args.envname, 
-       args.num_rollouts, 
+  main(args.expert_policy_file,
+       args.envname,
+       args.num_rollouts,
        args.expert_data_filename,
-       args.max_timesteps, 
+       args.max_timesteps,
        args.render)
