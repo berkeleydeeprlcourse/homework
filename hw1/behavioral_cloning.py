@@ -1,18 +1,29 @@
+# example usage
+# python behavioral_cloning.py experts/Hopper-v1.pkl Hopper-v1 --num_rollouts 20 --expert_data_filename expert_data_hopper.pkl
+# python behavioral_cloning.py experts/Ant-v1.pkl Ant-v1 --num_rollouts 20 --expert_data_filename expert_data_ant.pkl
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
+
+import argparse
 
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 
 from pickle_util import load_obj, save_obj
+import run_expert
 
 # hyperparameters
 GRADIENT_DESCENT_STEP_SIZE = 0.000005
 HIDDEN_LAYER_SIZE = 64
 BATCH_SIZE = 1000
 TRAINING_STEPS = 10000
+
+# for some reason tensorflow needs me to do this
+EXPERT_DATA_FILENAME = None
+ENVNAME = None
 
 def feedforward_nn(x, observation_size, output_size, hidden_size=HIDDEN_LAYER_SIZE):
   # x is of size OBSERVATION_SIZE
@@ -31,21 +42,21 @@ def feedforward_nn(x, observation_size, output_size, hidden_size=HIDDEN_LAYER_SI
 
   return y
 
-def import_observations():
-  expert_data = load_obj('expert_data.pkl')
+def import_observations(expert_data_filename):
+  expert_data = load_obj(expert_data_filename)
   return expert_data['observations']
 
 
-def import_actions():
-  expert_data = load_obj('expert_data.pkl')
+def import_actions(expert_data_filename):
+  expert_data = load_obj(expert_data_filename)
   actions = expert_data['actions']
   # we have to flatten the array, because they are column vectors for some reason
   return np.array([v.flatten() for v in actions])
 
 def main(_):
   # Import data
-  observations = import_observations()
-  actions = import_actions()
+  observations = import_observations(EXPERT_DATA_FILENAME)
+  actions = import_actions(EXPERT_DATA_FILENAME)
 
   observation_size = len(observations[0])
   action_size = len(actions[0])
@@ -76,11 +87,30 @@ def main(_):
       train_step.run(feed_dict={x: batch_xs, y_: batch_ys})
 
   save_obj(train_accuracies, 'training_accuracies.pkl')
+  plot_and_save_figure(train_accuracies)
+
+
+def plot_and_save_figure(train_accuracies):
   plt.plot(train_accuracies)
   plt.ylabel('training accuracy')
   plt.xlabel('training steps')
-  plt.show()
+  plt.savefig('training_accuracies_' + ENVNAME)
+
 
 if __name__ == '__main__':
+  parser = argparse.ArgumentParser()
+  parser.add_argument('expert_policy_file', type=str)
+  parser.add_argument('envname', type=str)
+  parser.add_argument('--expert_data_filename', type=str)
+  parser.add_argument('--render', action='store_true')
+  parser.add_argument('--max_timesteps', type=int)
+  parser.add_argument('--num_rollouts', type=int, default=20,
+                      help='Number of expert roll outs')
+  args = parser.parse_args()
+
+  EXPERT_DATA_FILENAME = args.expert_data_filename
+  ENVNAME = args.envname
+
+  run_expert.main(args.expert_policy_file, args.envname, args.num_rollouts, args.max_timesteps, args.render, args.expert_data_filename)
   tf.app.run(main=main)
   
