@@ -22,7 +22,7 @@ The name of the pickle file corresponds to the name of the gym environment.
 To get the table in section 3, run:
 
 ```
-./run_halfcheetah.sh | grep return
+./scripts/run_halfcheetah.sh | grep return
 ```
 
 This will output the raw values, mean, and standard deviation of the returns of the expert policy and the behavioral cloning policy.

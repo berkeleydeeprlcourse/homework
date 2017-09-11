@@ -11,22 +11,22 @@ import gym
 import numpy as np
 import tensorflow as tf
 
-from behavioral_cloning import feedforward_nn
+from behavioral_cloning import feedforward_nn, DEFAULT_HIDDEN_LAYER_SIZE
 
-def main(model_filepath, envname, num_rollouts, max_timesteps=None, render=False):
+def main(model_filepath, hidden_layer_size, envname, num_rollouts, max_timesteps=None, render=False):
     env = gym.make(envname)
-    
+
     # TODO nthomas - note that this won't work for input tensors, only input vectors.
     observation_size = env.observation_space.shape[0]
     action_size = env.action_space.shape[0]
 
     x = tf.placeholder(tf.float32, [None, observation_size])
-    y = feedforward_nn(x, observation_size, action_size)
+    y = feedforward_nn(x, observation_size, action_size, hidden_layer_size)
     saver = tf.train.Saver()
-    
+
     with tf.Session() as sess:
         saver.restore(sess, model_filepath)
-        
+
         max_steps = max_timesteps or env.spec.timestep_limit
 
         returns = []
@@ -70,10 +70,12 @@ if __name__ == '__main__':
   parser.add_argument('--render', action='store_true')
   parser.add_argument('--max_timesteps', type=int)
   parser.add_argument('--num_rollouts', type=int, default=20, help='Number of expert roll outs')
+  parser.add_argument('--hidden_layer_size', type=int, default=DEFAULT_HIDDEN_LAYER_SIZE)
   args = parser.parse_args()
 
-  main(args.model_filepath, 
-       args.envname, 
-       args.num_rollouts, 
-       args.max_timesteps, 
+  main(args.model_filepath,
+       args.hidden_layer_size,
+       args.envname,
+       args.num_rollouts,
+       args.max_timesteps,
        args.render)
