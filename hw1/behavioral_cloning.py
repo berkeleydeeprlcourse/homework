@@ -16,15 +16,16 @@ from pickle_util import load_obj, save_obj
 
 # hyperparameters
 GRADIENT_DESCENT_STEP_SIZE = 0.000005
-HIDDEN_LAYER_SIZE = 64
+DEFAULT_HIDDEN_LAYER_SIZE = 64
 BATCH_SIZE = 1000
 TRAINING_STEPS = 10000
 
 # for some reason tensorflow needs me to do this
 EXPERT_DATA_FILENAME = None
 ENVNAME = None
+HIDDEN_LAYER_SIZE = None
 
-def feedforward_nn(x, observation_size, output_size, hidden_size=HIDDEN_LAYER_SIZE):
+def feedforward_nn(x, observation_size, output_size, hidden_size):
   # x is of size OBSERVATION_SIZE
 
   # fully connected input layer
@@ -62,7 +63,7 @@ def main(_):
 
   # Create the model
   x = tf.placeholder(tf.float32, [None, observation_size])
-  y = feedforward_nn(x, observation_size, action_size)
+  y = feedforward_nn(x, observation_size, action_size, HIDDEN_LAYER_SIZE)
 
   # Define loss and optimizer
   y_ = tf.placeholder(tf.float32, [None, action_size])
@@ -106,10 +107,12 @@ if __name__ == '__main__':
   parser.add_argument('envname', type=str)
   parser.add_argument('--expert_data_filename', type=str)
   parser.add_argument('--model_filepath', type=str)
+  parser.add_argument('--hidden_layer_size', type=int, default=DEFAULT_HIDDEN_LAYER_SIZE)
   args = parser.parse_args()
 
   ENVNAME = args.envname
   EXPERT_DATA_FILENAME = args.expert_data_filename
   MODEL_FILEPATH = args.model_filepath
+  HIDDEN_LAYER_SIZE = args.hidden_layer_size
   tf.app.run(main=main)
   
