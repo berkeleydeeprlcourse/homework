@@ -1,6 +1,6 @@
 # example usage
-# python behavioral_cloning.py experts/Hopper-v1.pkl Hopper-v1 --num_rollouts 20 --expert_data_filename expert_data/expert_data_hopper.pkl
-# python behavioral_cloning.py experts/Ant-v1.pkl Ant-v1 --num_rollouts 20 --expert_data_filename expert_data/expert_data_ant.pkl
+# python behavioral_cloning.py Hopper-v1 --expert_data_filename expert_data/expert_data_hopper.pkl --model_filepath /tmp/model
+# python behavioral_cloning.py Ant-v1 --expert_data_filename expert_data/expert_data_ant.pkl --model_filepath /tmp/model
 
 from __future__ import absolute_import
 from __future__ import division
@@ -13,7 +13,6 @@ import numpy as np
 import tensorflow as tf
 
 from pickle_util import load_obj, save_obj
-import run_expert
 
 # hyperparameters
 GRADIENT_DESCENT_STEP_SIZE = 0.000005
@@ -85,6 +84,11 @@ def main(_):
       if i % 100 == 0:
         print('step %d, training accuracy %g' % (i, train_accuracy))
       train_step.run(feed_dict={x: batch_xs, y_: batch_ys})
+    
+    # save the trained model parameters
+    
+    saver = tf.train.Saver()
+    saver.save(sess, MODEL_FILEPATH)
 
   save_obj(train_accuracies, 'training_accuracies/training_accuracies_{}.pkl'.format(ENVNAME))
   plot_and_save_figure(train_accuracies)
@@ -99,18 +103,13 @@ def plot_and_save_figure(train_accuracies):
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
-  parser.add_argument('expert_policy_file', type=str)
   parser.add_argument('envname', type=str)
   parser.add_argument('--expert_data_filename', type=str)
-  parser.add_argument('--render', action='store_true')
-  parser.add_argument('--max_timesteps', type=int)
-  parser.add_argument('--num_rollouts', type=int, default=20,
-                      help='Number of expert roll outs')
+  parser.add_argument('--model_filepath', type=str)
   args = parser.parse_args()
 
-  EXPERT_DATA_FILENAME = args.expert_data_filename
   ENVNAME = args.envname
-
-  run_expert.main(args.expert_policy_file, args.envname, args.num_rollouts, args.max_timesteps, args.render, args.expert_data_filename)
+  EXPERT_DATA_FILENAME = args.expert_data_filename
+  MODEL_FILEPATH = args.model_filepath
   tf.app.run(main=main)
   
