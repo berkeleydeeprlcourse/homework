@@ -2,12 +2,19 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 
-from pickle_util import load_obj
+from pickle_util import load_obj, save_obj
 
-def feedforward_nn(x, observation_size, output_size, hidden_size=64):
+# hyperparameters
+GRADIENT_DESCENT_STEP_SIZE = 0.000005
+HIDDEN_LAYER_SIZE = 64
+BATCH_SIZE = 1000
+TRAINING_STEPS = 10000
+
+def feedforward_nn(x, observation_size, output_size, hidden_size=HIDDEN_LAYER_SIZE):
   # x is of size OBSERVATION_SIZE
 
   # fully connected input layer
@@ -51,17 +58,15 @@ def main(_):
   y_ = tf.placeholder(tf.float32, [None, action_size])
 
   l2_loss = tf.nn.l2_loss(y_ - y)
-  train_step = tf.train.GradientDescentOptimizer(0.000005).minimize(l2_loss)
+  train_step = tf.train.GradientDescentOptimizer(GRADIENT_DESCENT_STEP_SIZE).minimize(l2_loss)
 
   # Train
-  batch_size = 1000
-  training_steps = 10000
-  train_accuracies = np.zeros([training_steps])
+  train_accuracies = np.zeros([TRAINING_STEPS])
 
   with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
-    for i in range(training_steps):
-      indexes = np.random.choice(observations.shape[0], batch_size, replace=False)
+    for i in range(TRAINING_STEPS):
+      indexes = np.random.choice(observations.shape[0], BATCH_SIZE, replace=False)
       batch_xs = observations[indexes, :]
       batch_ys = actions[indexes, :]
       train_accuracy = l2_loss.eval(feed_dict={x: batch_xs, y_: batch_ys})
@@ -70,7 +75,7 @@ def main(_):
         print('step %d, training accuracy %g' % (i, train_accuracy))
       train_step.run(feed_dict={x: batch_xs, y_: batch_ys})
 
-  import matplotlib.pyplot as plt
+  save_obj(train_accuracies, 'training_accuracies.pkl')
   plt.plot(train_accuracies)
   plt.ylabel('training accuracy')
   plt.xlabel('training steps')
