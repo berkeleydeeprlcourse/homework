@@ -95,6 +95,8 @@ def main(expert_data_filename,
   save_obj(train_accuracies, 'training_accuracies/training_accuracies_{}.pkl'.format(envname))
   plot_and_save_figure(train_accuracies, envname)
 
+  return train_accuracies
+
 
 def plot_and_save_figure(train_accuracies, envname):
   plt.plot(train_accuracies)
