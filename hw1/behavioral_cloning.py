@@ -1,6 +1,6 @@
 # example usage
-# python behavioral_cloning.py experts/Hopper-v1.pkl Hopper-v1 --num_rollouts 20 --expert_data_filename expert_data_hopper.pkl
-# python behavioral_cloning.py experts/Ant-v1.pkl Ant-v1 --num_rollouts 20 --expert_data_filename expert_data_ant.pkl
+# python behavioral_cloning.py experts/Hopper-v1.pkl Hopper-v1 --num_rollouts 20 --expert_data_filename expert_data/expert_data_hopper.pkl
+# python behavioral_cloning.py experts/Ant-v1.pkl Ant-v1 --num_rollouts 20 --expert_data_filename expert_data/expert_data_ant.pkl
 
 from __future__ import absolute_import
 from __future__ import division
@@ -86,7 +86,7 @@ def main(_):
         print('step %d, training accuracy %g' % (i, train_accuracy))
       train_step.run(feed_dict={x: batch_xs, y_: batch_ys})
 
-  save_obj(train_accuracies, 'training_accuracies.pkl')
+  save_obj(train_accuracies, 'training_accuracies/training_accuracies_{}.pkl'.format(ENVNAME))
   plot_and_save_figure(train_accuracies)
 
 
@@ -94,7 +94,7 @@ def plot_and_save_figure(train_accuracies):
   plt.plot(train_accuracies)
   plt.ylabel('training accuracy')
   plt.xlabel('training steps')
-  plt.savefig('training_accuracies_' + ENVNAME)
+  plt.savefig('training_accuracies/training_accuracies_' + ENVNAME)
 
 
 if __name__ == '__main__':
