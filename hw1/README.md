@@ -16,3 +16,13 @@ In `experts/`, the provided expert policies are:
 * Walker2d-v1.pkl
 
 The name of the pickle file corresponds to the name of the gym environment.
+
+# nthomas HW Reproduction Instructions
+
+To get the table in section 3, run:
+
+```
+./run_halfcheetah.sh | grep return
+```
+
+This will output the raw values, mean, and standard deviation of the returns of the expert policy and the behavioral cloning policy.
