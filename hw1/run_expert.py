@@ -3,7 +3,7 @@
 """
 Code to load an expert policy and generate roll-out data for behavioral cloning.
 Example usage:
-    python run_expert.py experts/Hopper-v1.pkl Hopper-v1 --num_rollouts 20 --expert_data_filename expert_data/expert_data_hopper.pkl
+    python run_expert.py experts/Hopper-v1.pkl Hopper-v1 --num_rollouts 20 --expert_data_filename expert_data/expert_data_Hopper-v1.pkl
 
 Author of this script and included expert policies: Jonathan Ho (hoj@openai.com)
 """
