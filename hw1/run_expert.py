@@ -81,6 +81,6 @@ if __name__ == '__main__':
   main(args.expert_policy_file,
        args.envname,
        args.num_rollouts,
-       args.expert_data_filename,
-       args.max_timesteps,
-       args.render)
+       expert_data_filename=args.expert_data_filename,
+       max_timesteps=args.max_timesteps,
+       render=args.render)

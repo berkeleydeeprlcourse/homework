@@ -118,6 +118,6 @@ if __name__ == '__main__':
   main(args.expert_data_filename,
        args.envname,
        args.model_filepath,
-       training_steps=DEFAULT_TRAINING_STEPS,
+       training_steps=args.training_steps,
        hidden_layer_size=args.hidden_layer_size)
 
