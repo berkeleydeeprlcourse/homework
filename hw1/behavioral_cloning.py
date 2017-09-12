@@ -103,6 +103,7 @@ def plot_and_save_figure(train_accuracies, envname):
   plt.ylabel('training accuracy')
   plt.xlabel('training steps')
   plt.savefig('training_accuracies/training_accuracies_' + envname)
+  plt.close()
 
 
 if __name__ == '__main__':
