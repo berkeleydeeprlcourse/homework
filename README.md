@@ -10,10 +10,12 @@ pip3 install -r requirements.txt
 
 # nthomas HW Reproduction Instructions
 
-Navigate to hw1
+Navigate to hw1 and create the requisite directories
 
 ```
 cd hw1
+mkdir expert_data
+mkdir training_accuracies
 ```
 
 ## Section 3
