@@ -76,7 +76,7 @@ if __name__ == '__main__':
 
   main(args.model_filepath,
        args.envname,
-       args.hidden_layer_size,
        args.num_rollouts,
+       args.hidden_layer_size,
        args.max_timesteps,
        args.render)
