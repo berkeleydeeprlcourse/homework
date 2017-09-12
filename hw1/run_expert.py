@@ -56,7 +56,7 @@ def main(expert_policy_file,
                     break
             returns.append(totalr)
 
-        print('returns', returns)
+        print('expert returns', returns)
         print('mean return', np.mean(returns))
         print('std of return', np.std(returns))
 

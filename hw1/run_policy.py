@@ -53,7 +53,7 @@ def main(model_filepath, envname, num_rollouts, hidden_layer_size=DEFAULT_HIDDEN
                     break
             returns.append(totalr)
 
-        print('returns', returns)
+        print('policy returns', returns)
         print('mean return', np.mean(returns))
         print('std of return', np.std(returns))
 
