@@ -1,0 +1,10 @@
+gym
+ipython[all]
+jupyter
+keras
+matplotlib
+mujoco_py==0.5.7
+numpy
+scipy
+tensorflow
+theano
