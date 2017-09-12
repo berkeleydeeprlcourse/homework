@@ -7,7 +7,7 @@ import numpy as np
 
 from run_expert import main as run_expert_main
 from run_policy import main as run_policy_main
-from behavioral_cloning import main as behavioral_cloning_main
+# from behavioral_cloning import main as behavioral_cloning_main
 
 def run_expert_rollouts(envname, num_rollouts):
     expert_data_filename = 'expert_data/expert_data_{}'.format(envname)
@@ -22,11 +22,15 @@ def run_expert_rollouts(envname, num_rollouts):
 def train_behavioral_cloning_model(envname):
     expert_data_filename = 'expert_data/expert_data_{}'.format(envname)
     model_filepath = 'models/{}'.format(envname)
-    training_accuracies = behavioral_cloning_main(expert_data_filename, envname, model_filepath)
-    print('training accuracy start and end')
-    print(training_accuracies[0])
-    print(training_accuracies[-1])
-    return training_accuracies
+    # training_accuracies = behavioral_cloning_main(expert_data_filename, envname, model_filepath)
+    # TODO nthomas this is a hack to get around the fact that saver.save followed by saver.restore
+    # does not work in a single loop
+    import subprocess
+    subprocess.check_call('python behavioral_cloning.py {} --expert_data_filename {} --model_filepath {}'.format(envname, expert_data_filename, model_filepath), shell=True)
+    # print('training accuracy start and end')
+    # print(training_accuracies[0])
+    # print(training_accuracies[-1])
+    # return training_accuracies
 
 def run_trained_policy(envname):
     model_filepath = 'models/{}'.format(envname)
