@@ -2,7 +2,7 @@
 # generate expert data
 # python run_expert.py experts/Ant-v1.pkl Ant-v1 --num_rollouts 20 --expert_data_filename expert_data/expert_data_Ant-v1.pkl
 # run dagger
-# python dagger.py Ant-v1 --expert_data_filename expert_data/expert_data_Ant-v1.pkl --expert_policy_file experts/Ant-v1.pkl
+# python dagger.py Ant-v1 --expert_data_filename expert_data/expert_data_Ant-v1.pkl --expert_policy_file experts/Ant-v1.pkl --num_rollouts 20 --training_steps 10000
 
 from __future__ import absolute_import
 from __future__ import division
@@ -143,6 +143,7 @@ def dagger(expert_data_filename,
 
     train_accuracies = np.array([])
     mean_rewards = []
+    stdev_rewards = []
     with tf.Session() as sess:
         for i in range(dagger_iterations):
             print('running dagger iteration {}'.format(i))
@@ -152,18 +153,26 @@ def dagger(expert_data_filename,
             # generate states with policy
             new_observations, new_actions, rewards = run_policy_loop(sess, envname, num_rollouts, y, x)
             mean_rewards.append(np.mean(rewards))
+            stdev_rewards.append(np.std(rewards))
             # ask for expert actions
             new_actions = get_expert_actions(new_observations, expert_policy_file)
             observations = np.append(observations, new_observations, axis=0)
             actions = np.append(actions, new_actions, axis=0)
 
     plot_and_save_training_accuracies(train_accuracies, envname)
-    plot_and_save_dagger_reward(mean_rewards, envname)
+    plot_and_save_dagger_reward(mean_rewards, stdev_rewards, envname)
     return train_accuracies
 
-def plot_and_save_dagger_reward(mean_rewards, envname):
-  plt.plot(mean_rewards)
-  plt.ylabel('mean dagger reward accuracy')
+ANT_BEHAVIORAL_CLONING = 964.727951702
+ANT_EXPERT_BASELINE = 4756.35794332
+
+def plot_and_save_dagger_reward(mean_rewards, stdev_rewards, envname, expert_baseline=ANT_EXPERT_BASELINE, behavioral_cloning=ANT_BEHAVIORAL_CLONING):
+  print(mean_rewards)
+  print(stdev_rewards)
+  plt.errorbar(range(len(mean_rewards)), mean_rewards, stdev_rewards)
+  plt.axhline(y=expert_baseline, color='r', linestyle='--')
+  plt.axhline(y=behavioral_cloning, color='g', linestyle='--')
+  plt.ylabel('mean dagger reward')
   plt.xlabel('dagger iterations')
   plt.savefig('dagger_mean_reward_' + envname)
   plt.close()
