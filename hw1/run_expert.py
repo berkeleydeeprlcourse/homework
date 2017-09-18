@@ -50,7 +50,7 @@ class SupervisedPolicy:
     def load(self, filename):
         self.model.load_weights(filename)
 
-# A policy that mmay use the student's action but, with probability
+# A policy that may use the student's action but, with probability
 # fraction_assist, uses the teacher's action instead. In either case, it
 # remembers the teacher's action, which can be used for supervised learning.
 class AssistedPolicy:
@@ -147,6 +147,7 @@ def dagger(env, student, teacher, max_steps, verbose):
     
     return student
 
+# Specify and read arguments from the command line.
 def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('expert_policy_file', type=str)
