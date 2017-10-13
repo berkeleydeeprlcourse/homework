@@ -12,6 +12,6 @@ In `experts/`, the provided expert policies are:
 * RoboschoolReacher-v1.py
 * RoboschoolWalker2d-v1.py
 
-Instructions: http://rll.berkeley.edu/deeprlcourse/docs/hw1.pdf
+Instructions: http://rll.berkeley.edu/deeprlcourse/f17docs/hw1fall2017.pdf
 
 Plotting handout: http://rll.berkeley.edu/deeprlcourse/docs/plotting_handout.pdf
