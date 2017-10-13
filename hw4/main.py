@@ -1,278 +1,248 @@
 import numpy as np
 import tensorflow as tf
 import gym
+from dynamics import NNDynamicsModel
+from controllers import MPCcontroller, RandomController
+from cost_functions import cheetah_cost_fn, trajectory_cost_fn
+import time
 import logz
-import scipy.signal
+import os
+import copy
+import matplotlib.pyplot as plt
+from cheetah_env import HalfCheetahEnvNew
 
-def normc_initializer(std=1.0):
+def sample(env, 
+           controller, 
+           num_paths=10, 
+           horizon=1000, 
+           render=False,
+           verbose=False):
     """
-    Initialize array with normalized columns
+        Write a sampler function which takes in an environment, a controller (either random or the MPC controller), 
+        and returns rollouts by running on the env. 
+        Each path can have elements for observations, next_observations, rewards, returns, actions, etc.
     """
-    def _initializer(shape, dtype=None, partition_info=None): #pylint: disable=W0613
-        out = np.random.randn(*shape).astype(np.float32)
-        out *= std / np.sqrt(np.square(out).sum(axis=0, keepdims=True))
-        return tf.constant(out)
-    return _initializer
+    paths = []
+    """ YOUR CODE HERE """
 
+    return paths
 
-def dense(x, size, name, weight_init=None):
+# Utility to compute cost a path for a given cost function
+def path_cost(cost_fn, path):
+    return trajectory_cost_fn(cost_fn, path['observations'], path['actions'], path['next_observations'])
+
+def compute_normalization(data):
     """
-    Dense (fully connected) layer
+    Write a function to take in a dataset and compute the means, and stds.
+    Return 6 elements: mean of s_t, std of s_t, mean of (s_t+1 - s_t), std of (s_t+1 - s_t), mean of actions, std of actions
     """
-    w = tf.get_variable(name + "/w", [x.get_shape()[1], size], initializer=weight_init)
-    b = tf.get_variable(name + "/b", [size], initializer=tf.zeros_initializer())
-    return tf.matmul(x, w) + b
 
-def fancy_slice_2d(X, inds0, inds1):
+    """ YOUR CODE HERE """
+    return mean_obs, std_obs, mean_deltas, std_deltas, mean_action, std_action
+
+
+def plot_comparison(env, dyn_model):
     """
-    Like numpy's X[inds0, inds1]
+    Write a function to generate plots comparing the behavior of the model predictions for each element of the state to the actual ground truth, using randomly sampled actions. 
     """
-    inds0 = tf.cast(inds0, tf.int64)
-    inds1 = tf.cast(inds1, tf.int64)
-    shape = tf.cast(tf.shape(X), tf.int64)
-    ncols = shape[1]
-    Xflat = tf.reshape(X, [-1])
-    return tf.gather(Xflat, inds0 * ncols + inds1)
+    """ YOUR CODE HERE """
+    pass
 
-def discount(x, gamma):
+def train(env, 
+         cost_fn,
+         logdir=None,
+         render=False,
+         learning_rate=1e-3,
+         onpol_iters=10,
+         dynamics_iters=60,
+         batch_size=512,
+         num_paths_random=10, 
+         num_paths_onpol=10, 
+         num_simulated_paths=10000,
+         env_horizon=1000, 
+         mpc_horizon=15,
+         n_layers=2,
+         size=500,
+         activation=tf.nn.relu,
+         output_activation=None
+         ):
+
     """
-    Compute discounted sum of future values
-    out[i] = in[i] + gamma * in[i+1] + gamma^2 * in[i+2] + ...
+
+    Arguments:
+
+    onpol_iters                 Number of iterations of onpolicy aggregation for the loop to run. 
+
+    dynamics_iters              Number of iterations of training for the dynamics model
+    |_                          which happen per iteration of the aggregation loop.
+
+    batch_size                  Batch size for dynamics training.
+
+    num_paths_random            Number of paths/trajectories/rollouts generated 
+    |                           by a random agent. We use these to train our 
+    |_                          initial dynamics model.
+    
+    num_paths_onpol             Number of paths to collect at each iteration of
+    |_                          aggregation, using the Model Predictive Control policy.
+
+    num_simulated_paths         How many fictitious rollouts the MPC policy
+    |                           should generate each time it is asked for an
+    |_                          action.
+
+    env_horizon                 Number of timesteps in each path.
+
+    mpc_horizon                 The MPC policy generates actions by imagining 
+    |                           fictitious rollouts, and picking the first action
+    |                           of the best fictitious rollout. This argument is
+    |                           how many timesteps should be in each fictitious
+    |_                          rollout.
+
+    n_layers/size/activations   Neural network architecture arguments. 
+
     """
-    return scipy.signal.lfilter([1],[1,-gamma],x[::-1], axis=0)[::-1]
 
-def explained_variance_1d(ypred,y):
-    """
-    Var[ypred - y] / var[y]. 
-    https://www.quora.com/What-is-the-meaning-proportion-of-variance-explained-in-linear-regression
-    """
-    assert y.ndim == 1 and ypred.ndim == 1    
-    vary = np.var(y)
-    return np.nan if vary==0 else 1 - np.var(y-ypred)/vary
-
-def categorical_sample_logits(logits):
-    """
-    Samples (symbolically) from categorical distribution, where logits is a NxK
-    matrix specifying N categorical distributions with K categories
-
-    specifically, exp(logits) / sum( exp(logits), axis=1 ) is the 
-    probabilities of the different classes
-
-    Cleverly uses gumbell trick, based on
-    https://github.com/tensorflow/tensorflow/issues/456
-    """
-    U = tf.random_uniform(tf.shape(logits))
-    return tf.argmax(logits - tf.log(-tf.log(U)), dimension=1)
-
-def pathlength(path):
-    return len(path["reward"])
-
-class LinearValueFunction(object):
-    coef = None
-    def fit(self, X, y):
-        Xp = self.preproc(X)
-        A = Xp.T.dot(Xp)
-        nfeats = Xp.shape[1]
-        A[np.arange(nfeats), np.arange(nfeats)] += 1e-3 # a little ridge regression
-        b = Xp.T.dot(y)
-        self.coef = np.linalg.solve(A, b)
-    def predict(self, X):
-        if self.coef is None:
-            return np.zeros(X.shape[0])
-        else:
-            return self.preproc(X).dot(self.coef)
-    def preproc(self, X):
-        return np.concatenate([np.ones([X.shape[0], 1]), X, np.square(X)/2.0], axis=1)
-
-class NnValueFunction(object):
-    pass # YOUR CODE HERE
-
-def lrelu(x, leak=0.2):
-    f1 = 0.5 * (1 + leak)
-    f2 = 0.5 * (1 - leak)
-    return f1 * x + f2 * abs(x)
-
-
-
-def main_cartpole(n_iter=100, gamma=1.0, min_timesteps_per_batch=1000, stepsize=1e-2, animate=True, logdir=None):
-    env = gym.make("CartPole-v0")
-    ob_dim = env.observation_space.shape[0]
-    num_actions = env.action_space.n
     logz.configure_output_dir(logdir)
-    vf = LinearValueFunction()
 
-    # Symbolic variables have the prefix sy_, to distinguish them from the numerical values
-    # that are computed later in these function
-    sy_ob_no = tf.placeholder(shape=[None, ob_dim], name="ob", dtype=tf.float32) # batch of observations
-    sy_ac_n = tf.placeholder(shape=[None], name="ac", dtype=tf.int32) # batch of actions taken by the policy, used for policy gradient computation
-    sy_adv_n = tf.placeholder(shape=[None], name="adv", dtype=tf.float32) # advantage function estimate
-    sy_h1 = lrelu(dense(sy_ob_no, 32, "h1", weight_init=normc_initializer(1.0))) # hidden layer
-    sy_logits_na = dense(sy_h1, num_actions, "final", weight_init=normc_initializer(0.05)) # "logits", describing probability distribution of final layer
-    # we use a small initialization for the last layer, so the initial policy has maximal entropy
-    sy_oldlogits_na = tf.placeholder(shape=[None, num_actions], name='oldlogits', dtype=tf.float32) # logits BEFORE update (just used for KL diagnostic)
-    sy_logp_na = tf.nn.log_softmax(sy_logits_na) # logprobability of actions
-    sy_sampled_ac = categorical_sample_logits(sy_logits_na)[0] # sampled actions, used for defining the policy (NOT computing the policy gradient)
-    sy_n = tf.shape(sy_ob_no)[0]
-    sy_logprob_n = fancy_slice_2d(sy_logp_na, tf.range(sy_n), sy_ac_n) # log-prob of actions taken -- used for policy gradient calculation
+    #========================================================
+    # 
+    # First, we need a lot of data generated by a random
+    # agent, with which we'll begin to train our dynamics
+    # model.
 
-    # The following quantities are just used for computing KL and entropy, JUST FOR DIAGNOSTIC PURPOSES >>>>
-    sy_oldlogp_na = tf.nn.log_softmax(sy_oldlogits_na)
-    sy_oldp_na = tf.exp(sy_oldlogp_na) 
-    sy_kl = tf.reduce_sum(sy_oldp_na * (sy_oldlogp_na - sy_logp_na)) / tf.to_float(sy_n)
-    sy_p_na = tf.exp(sy_logp_na)
-    sy_ent = tf.reduce_sum( - sy_p_na * sy_logp_na) / tf.to_float(sy_n)
-    # <<<<<<<<<<<<<
+    random_controller = RandomController(env)
 
-    sy_surr = - tf.reduce_mean(sy_adv_n * sy_logprob_n) # Loss function that we'll differentiate to get the policy gradient ("surr" is for "surrogate loss")
-
-    sy_stepsize = tf.placeholder(shape=[], dtype=tf.float32) # Symbolic, in case you want to change the stepsize during optimization. (We're not doing that currently)
-    update_op = tf.train.AdamOptimizer(sy_stepsize).minimize(sy_surr)
-
-    tf_config = tf.ConfigProto(inter_op_parallelism_threads=1, intra_op_parallelism_threads=1) 
-    # use single thread. on such a small problem, multithreading gives you a slowdown
-    # this way, we can better use multiple cores for different experiments
-    sess = tf.Session(config=tf_config)
-    sess.__enter__() # equivalent to `with sess:`
-    tf.global_variables_initializer().run() #pylint: disable=E1101
-
-    total_timesteps = 0
-
-    for i in range(n_iter):
-        print("********** Iteration %i ************"%i)
-
-        # Collect paths until we have enough timesteps
-        timesteps_this_batch = 0
-        paths = []
-        while True:
-            ob = env.reset()
-            terminated = False
-            obs, acs, rewards = [], [], []
-            animate_this_episode=(len(paths)==0 and (i % 10 == 0) and animate)
-            while True:
-                if animate_this_episode:
-                    env.render()
-                obs.append(ob)
-                ac = sess.run(sy_sampled_ac, feed_dict={sy_ob_no : ob[None]})
-                acs.append(ac)
-                ob, rew, done, _ = env.step(ac)
-                rewards.append(rew)
-                if done:
-                    break                    
-            path = {"observation" : np.array(obs), "terminated" : terminated,
-                    "reward" : np.array(rewards), "action" : np.array(acs)}
-            paths.append(path)
-            timesteps_this_batch += pathlength(path)
-            if timesteps_this_batch > min_timesteps_per_batch:
-                break
-        total_timesteps += timesteps_this_batch
-        # Estimate advantage function
-        vtargs, vpreds, advs = [], [], []
-        for path in paths:
-            rew_t = path["reward"]
-            return_t = discount(rew_t, gamma)
-            vpred_t = vf.predict(path["observation"])
-            adv_t = return_t - vpred_t
-            advs.append(adv_t)
-            vtargs.append(return_t)
-            vpreds.append(vpred_t)
-
-        # Build arrays for policy update
-        ob_no = np.concatenate([path["observation"] for path in paths])
-        ac_n = np.concatenate([path["action"] for path in paths])
-        adv_n = np.concatenate(advs)
-        standardized_adv_n = (adv_n - adv_n.mean()) / (adv_n.std() + 1e-8)
-        vtarg_n = np.concatenate(vtargs)
-        vpred_n = np.concatenate(vpreds)
-        vf.fit(ob_no, vtarg_n)
-
-        # Policy update
-        _, oldlogits_na = sess.run([update_op, sy_logits_na], feed_dict={sy_ob_no:ob_no, sy_ac_n:ac_n, sy_adv_n:standardized_adv_n, sy_stepsize:stepsize})
-        kl, ent = sess.run([sy_kl, sy_ent], feed_dict={sy_ob_no:ob_no, sy_oldlogits_na:oldlogits_na})
-
-        # Log diagnostics
-        logz.log_tabular("EpRewMean", np.mean([path["reward"].sum() for path in paths]))
-        logz.log_tabular("EpLenMean", np.mean([pathlength(path) for path in paths]))
-        logz.log_tabular("KLOldNew", kl)
-        logz.log_tabular("Entropy", ent)
-        logz.log_tabular("EVBefore", explained_variance_1d(vpred_n, vtarg_n))
-        logz.log_tabular("EVAfter", explained_variance_1d(vf.predict(ob_no), vtarg_n))
-        logz.log_tabular("TimestepsSoFar", total_timesteps)
-        # If you're overfitting, EVAfter will be way larger than EVBefore.
-        # Note that we fit value function AFTER using it to compute the advantage function to avoid introducing bias
-        logz.dump_tabular()
-
-def main_pendulum(logdir, seed, n_iter, gamma, min_timesteps_per_batch, initial_stepsize, desired_kl, vf_type, vf_params, animate=False):
-    tf.set_random_seed(seed)
-    np.random.seed(seed)
-    env = gym.make("Pendulum-v0")
-    ob_dim = env.observation_space.shape[0]
-    ac_dim = env.action_space.shape[0]
-    logz.configure_output_dir(logdir)
-    if vf_type == 'linear':
-        vf = LinearValueFunction(**vf_params)
-    elif vf_type == 'nn':
-        vf = NnValueFunction(ob_dim=ob_dim, **vf_params)
+    """ YOUR CODE HERE """
 
 
-    YOUR_CODE_HERE
+    #========================================================
+    # 
+    # The random data will be used to get statistics (mean
+    # and std) for the observations, actions, and deltas
+    # (where deltas are o_{t+1} - o_t). These will be used
+    # for normalizing inputs and denormalizing outputs
+    # from the dynamics network. 
+    # 
+    normalization = """ YOUR CODE HERE """
 
 
-    sy_surr = - tf.reduce_mean(sy_adv_n * sy_logprob_n) # Loss function that we'll differentiate to get the policy gradient ("surr" is for "surrogate loss")
-
-    sy_stepsize = tf.placeholder(shape=[], dtype=tf.float32) # Symbolic, in case you want to change the stepsize during optimization. (We're not doing that currently)
-    update_op = tf.train.AdamOptimizer(sy_stepsize).minimize(sy_surr)
-
+    #========================================================
+    # 
+    # Build dynamics model and MPC controllers.
+    # 
     sess = tf.Session()
-    sess.__enter__() # equivalent to `with sess:`
-    tf.global_variables_initializer().run() #pylint: disable=E1101
 
-    total_timesteps = 0
-    stepsize = initial_stepsize
+    dyn_model = NNDynamicsModel(env=env, 
+                                n_layers=n_layers, 
+                                size=size, 
+                                activation=activation, 
+                                output_activation=output_activation, 
+                                normalization=normalization,
+                                batch_size=batch_size,
+                                iterations=dynamics_iters,
+                                learning_rate=learning_rate,
+                                sess=sess)
 
-    for i in range(n_iter):
-        print("********** Iteration %i ************"%i)
-
-        YOUR_CODE_HERE
-
-        if kl > desired_kl * 2: 
-            stepsize /= 1.5
-            print('stepsize -> %s'%stepsize)
-        elif kl < desired_kl / 2: 
-            stepsize *= 1.5
-            print('stepsize -> %s'%stepsize)
-        else:
-            print('stepsize OK')
+    mpc_controller = MPCcontroller(env=env, 
+                                   dyn_model=dyn_model, 
+                                   horizon=mpc_horizon, 
+                                   cost_fn=cost_fn, 
+                                   num_simulated_paths=num_simulated_paths)
 
 
-        # Log diagnostics
-        logz.log_tabular("EpRewMean", np.mean([path["reward"].sum() for path in paths]))
-        logz.log_tabular("EpLenMean", np.mean([pathlength(path) for path in paths]))
-        logz.log_tabular("KLOldNew", kl)
-        logz.log_tabular("Entropy", ent)
-        logz.log_tabular("EVBefore", explained_variance_1d(vpred_n, vtarg_n))
-        logz.log_tabular("EVAfter", explained_variance_1d(vf.predict(ob_no), vtarg_n))
-        logz.log_tabular("TimestepsSoFar", total_timesteps)
-        # If you're overfitting, EVAfter will be way larger than EVBefore.
-        # Note that we fit value function AFTER using it to compute the advantage function to avoid introducing bias
+    #========================================================
+    # 
+    # Tensorflow session building.
+    # 
+    sess.__enter__()
+    tf.global_variables_initializer().run()
+
+    #========================================================
+    # 
+    # Take multiple iterations of onpolicy aggregation at each iteration refitting the dynamics model to current dataset and then taking onpolicy samples and aggregating to the dataset. 
+    # Note: You don't need to use a mixing ratio in this assignment for new and old data as described in https://arxiv.org/abs/1708.02596
+    # 
+    for itr in range(onpol_iters):
+        """ YOUR CODE HERE """
+
+
+
+        # LOGGING
+        # Statistics for performance of MPC policy using
+        # our learned dynamics model
+        logz.log_tabular('Iteration', itr)
+        # In terms of cost function which your MPC controller uses to plan
+        logz.log_tabular('AverageCost', np.mean(costs))
+        logz.log_tabular('StdCost', np.std(costs))
+        logz.log_tabular('MinimumCost', np.min(costs))
+        logz.log_tabular('MaximumCost', np.max(costs))
+        # In terms of true environment reward of your rolled out trajectory using the MPC controller
+        logz.log_tabular('AverageReturn', np.mean(returns))
+        logz.log_tabular('StdReturn', np.std(returns))
+        logz.log_tabular('MinimumReturn', np.min(returns))
+        logz.log_tabular('MaximumReturn', np.max(returns))
+
         logz.dump_tabular()
 
+def main():
 
-def main_pendulum1(d):
-    return main_pendulum(**d)
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--env_name', type=str, default='HalfCheetah-v1')
+    # Experiment meta-params
+    parser.add_argument('--exp_name', type=str, default='mb_mpc')
+    parser.add_argument('--seed', type=int, default=3)
+    parser.add_argument('--render', action='store_true')
+    # Training args
+    parser.add_argument('--learning_rate', '-lr', type=float, default=1e-3)
+    parser.add_argument('--onpol_iters', '-n', type=int, default=1)
+    parser.add_argument('--dyn_iters', '-nd', type=int, default=60)
+    parser.add_argument('--batch_size', '-b', type=int, default=512)
+    # Data collection
+    parser.add_argument('--random_paths', '-r', type=int, default=10)
+    parser.add_argument('--onpol_paths', '-d', type=int, default=10)
+    parser.add_argument('--simulated_paths', '-sp', type=int, default=1000)
+    parser.add_argument('--ep_len', '-ep', type=int, default=1000)
+    # Neural network architecture args
+    parser.add_argument('--n_layers', '-l', type=int, default=2)
+    parser.add_argument('--size', '-s', type=int, default=500)
+    # MPC Controller
+    parser.add_argument('--mpc_horizon', '-m', type=int, default=15)
+    args = parser.parse_args()
+
+    # Set seed
+    np.random.seed(args.seed)
+    tf.set_random_seed(args.seed)
+
+    # Make data directory if it does not already exist
+    if not(os.path.exists('data')):
+        os.makedirs('data')
+    logdir = args.exp_name + '_' + args.env_name + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
+    logdir = os.path.join('data', logdir)
+    if not(os.path.exists(logdir)):
+        os.makedirs(logdir)
+
+    # Make env
+    if args.env_name is "HalfCheetah-v1":
+        env = HalfCheetahEnvNew()
+        cost_fn = cheetah_cost_fn
+    train(env=env, 
+                 cost_fn=cost_fn,
+                 logdir=logdir,
+                 render=args.render,
+                 learning_rate=args.learning_rate,
+                 onpol_iters=args.onpol_iters,
+                 dynamics_iters=args.dyn_iters,
+                 batch_size=args.batch_size,
+                 num_paths_random=args.random_paths, 
+                 num_paths_onpol=args.onpol_paths, 
+                 num_simulated_paths=args.simulated_paths,
+                 env_horizon=args.ep_len, 
+                 mpc_horizon=args.mpc_horizon,
+                 n_layers = args.n_layers,
+                 size=args.size,
+                 activation=tf.nn.relu,
+                 output_activation=None,
+                 )
 
 if __name__ == "__main__":
-    if 1:
-        main_cartpole(logdir=None) # when you want to start collecting results, set the logdir
-    if 0:
-        general_params = dict(gamma=0.97, animate=False, min_timesteps_per_batch=2500, n_iter=300, initial_stepsize=1e-3)
-        params = [
-            dict(logdir='/tmp/ref/linearvf-kl2e-3-seed0', seed=0, desired_kl=2e-3, vf_type='linear', vf_params={}, **general_params),
-            dict(logdir='/tmp/ref/nnvf-kl2e-3-seed0', seed=0, desired_kl=2e-3, vf_type='nn', vf_params=dict(n_epochs=10, stepsize=1e-3), **general_params),
-            dict(logdir='/tmp/ref/linearvf-kl2e-3-seed1', seed=1, desired_kl=2e-3, vf_type='linear', vf_params={}, **general_params),
-            dict(logdir='/tmp/ref/nnvf-kl2e-3-seed1', seed=1, desired_kl=2e-3, vf_type='nn', vf_params=dict(n_epochs=10, stepsize=1e-3), **general_params),
-            dict(logdir='/tmp/ref/linearvf-kl2e-3-seed2', seed=2, desired_kl=2e-3, vf_type='linear', vf_params={}, **general_params),
-            dict(logdir='/tmp/ref/nnvf-kl2e-3-seed2', seed=2, desired_kl=2e-3, vf_type='nn', vf_params=dict(n_epochs=10, stepsize=1e-3), **general_params),
-        ]
-        import multiprocessing
-        p = multiprocessing.Pool()
-        p.map(main_pendulum1, params)
+    main()

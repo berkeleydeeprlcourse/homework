@@ -1,3 +1,5 @@
+import json
+
 """
 
 Some simple logging functionality, inspired by rllab's logging.
@@ -14,6 +16,8 @@ A['EpRewMean']
 """
 
 import os.path as osp, shutil, time, atexit, os, subprocess
+import pickle
+import tensorflow as tf
 
 color2num = dict(
     gray=30,
@@ -47,15 +51,12 @@ def configure_output_dir(d=None):
     Set output directory to d, or to /tmp/somerandomnumber if d is None
     """
     G.output_dir = d or "/tmp/experiments/%i"%int(time.time())
-    assert not osp.exists(G.output_dir), "Log dir %s already exists! Delete it first or use a different dir"%G.output_dir
-    os.makedirs(G.output_dir)
+    if osp.exists(G.output_dir):
+        print("Log dir %s already exists! Delete it first or use a different dir"%G.output_dir)
+    else:
+        os.makedirs(G.output_dir)
     G.output_file = open(osp.join(G.output_dir, "log.txt"), 'w')
     atexit.register(G.output_file.close)
-    try:
-        cmd = "cd %s && git diff > %s 2>/dev/null"%(osp.dirname(__file__), osp.join(G.output_dir, "a.diff"))
-        subprocess.check_call(cmd, shell=True) # Save git diff to experiment directory
-    except subprocess.CalledProcessError:
-        print("configure_output_dir: not storing the git diff, probably because you're not in a git repo")
     print(colorize("Logging data to %s"%G.output_file.name, 'green', bold=True))
 
 def log_tabular(key, val):
@@ -70,19 +71,38 @@ def log_tabular(key, val):
     assert key not in G.log_current_row, "You already set %s this iteration. Maybe you forgot to call dump_tabular()"%key
     G.log_current_row[key] = val
 
+def save_params(params):
+    with open(osp.join(G.output_dir, "params.json"), 'w') as out:
+        out.write(json.dumps(params, separators=(',\n','\t:\t'), sort_keys=True))
+
+def pickle_tf_vars():  
+    """
+    Saves tensorflow variables
+    Requires them to be initialized first, also a default session must exist
+    """
+    _dict = {v.name : v.eval() for v in tf.global_variables()}
+    with open(osp.join(G.output_dir, "vars.pkl"), 'wb') as f:
+        pickle.dump(_dict, f)
+    
+
 def dump_tabular():
     """
     Write all of the diagnostics from the current iteration
     """
     vals = []
-    print("-"*37)
+    key_lens = [len(key) for key in G.log_headers]
+    max_key_len = max(15,max(key_lens))
+    keystr = '%'+'%d'%max_key_len
+    fmt = "| " + keystr + "s | %15s |"
+    n_slashes = 22 + max_key_len
+    print("-"*n_slashes)
     for key in G.log_headers:
         val = G.log_current_row.get(key, "")
         if hasattr(val, "__float__"): valstr = "%8.3g"%val
         else: valstr = val
-        print("| %15s | %15s |"%(key, valstr))
+        print(fmt%(key, valstr))
         vals.append(val)
-    print("-"*37)
+    print("-"*n_slashes)
     if G.output_file is not None:
         if G.first_row:
             G.output_file.write("\t".join(G.log_headers))
