@@ -52,16 +52,17 @@ def pathlength(path):
 
 def train_PG(exp_name='',
              env_name='CartPole-v0',
-             n_iter=100, 
-             gamma=1.0, 
-             min_timesteps_per_batch=1000, 
+             n_iter=100,
+             gamma=1.0,
+             gae_lambda=1.0,
+             min_timesteps_per_batch=1000,
              max_path_length=None,
-             learning_rate=5e-3, 
-             reward_to_go=True, 
-             animate=True, 
-             logdir=None, 
+             learning_rate=5e-3,
+             reward_to_go=True,
+             animate=True,
+             logdir=None,
              normalize_advantages=True,
-             nn_baseline=False, 
+             nn_baseline=False,
              seed=0,
              # network arguments
              n_layers=1,
@@ -175,14 +176,14 @@ def train_PG(exp_name='',
 
     if discrete:
         # YOUR_CODE_HERE
-        # Compute stochastic policy over discrete actions.
+        # Compute stochastic policy over discrete actions
         sy_logits_na = build_mlp(sy_ob_no, ac_dim, "policy", n_layers=n_layers, size=size)
 
-        # Sample an action from the stochastic policy.
+        # Sample an action from the stochastic policy
         sy_sampled_nac = tf.multinomial(sy_logits_na, 1)
         sy_sampled_nac = tf.reshape(sy_sampled_nac, [-1])
 
-        # Likelihood of chosen action.
+        # Likelihood of chosen action
         sy_logprob_n = -tf.nn.sparse_softmax_cross_entropy_with_logits(
             labels=sy_nac, logits=sy_logits_na)
 
@@ -194,11 +195,11 @@ def train_PG(exp_name='',
         sy_logstd = tf.Variable(tf.zeros([1, ac_dim]), name="policy/logstd", dtype=float32)
         sy_std = tf.exp(sy_logstd)
 
-        # Sample an action from the stochastic policy.
+        # Sample an action from the stochastic policy
         sy_sampled_z = tf.random_normal(tf.shape(sy_mean_na))
         sy_sampled_nac = sy_mean_na + sy_std * sy_sampled_z
 
-        # Likelihood of chosen action.
+        # Likelihood of chosen action
         sy_logprob_n = -0.5 * tf.reduce_sum(tf.square(sy_sampled_z), axis=1)
 
 
@@ -379,7 +380,32 @@ def train_PG(exp_name='',
             # #bl2 below.)
 
             b_n = sess.run(baseline_prediction, feed_dict={sy_ob_no : ob_no})
-            adv_n = q_n - b_n
+            b_n -= np.mean(b_n)
+            b_n /= np.linalg.norm(b_n)
+            b_n *= np.linalg.norm(q_n - np.mean(q_n))
+            b_n += np.mean(q_n)
+
+            # Generalized advantage estimation
+            adv_n = []
+            idx = 0
+            for path in paths:
+                adv = 0
+                adv_path = []
+                V_next = 0
+                idx += len(path["reward"])
+
+                # Dynamic programming over reversed path
+                for rew, V in zip(reversed(path["reward"]), b_n[idx-1:None:-1]):
+                    bellman_error = rew + gamma * V_next - V
+                    adv = bellman_error + gae_lambda * gamma * adv
+                    adv_path.append(adv)
+                    V_next = V
+                adv_path.reverse()
+
+                # Append these advantage values
+                if not reward_to_go:
+                    adv_path = [adv_path[0]] * len(adv_path)
+                adv_n.extend(adv_path)
         else:
             adv_n = q_n.copy()
 
@@ -412,7 +438,9 @@ def train_PG(exp_name='',
             # targets to have mean zero and std=1. (Goes with Hint #bl1 above.)
 
             # YOUR_CODE_HERE
-            sess.run(baseline_update_op, feed_dict={sy_ob_no : ob_no, sy_target_n : q_n})
+            q_normalized_n = q_n - np.mean(q_n)
+            q_normalized_n /= np.linalg.norm(q_normalized_n)
+            sess.run(baseline_update_op, feed_dict={sy_ob_no : ob_no, sy_target_n : q_normalized_n})
 
         #====================================================================================#
         #                           ----------SECTION 4----------
@@ -452,6 +480,7 @@ def main():
     parser.add_argument('--exp_name', type=str, default='vpg')
     parser.add_argument('--render', action='store_true')
     parser.add_argument('--discount', type=float, default=1.0)
+    parser.add_argument('--gae_lambda', type=float, default=1.0)
     parser.add_argument('--n_iter', '-n', type=int, default=100)
     parser.add_argument('--batch_size', '-b', type=int, default=1000)
     parser.add_argument('--ep_len', '-ep', type=float, default=-1.)
@@ -483,6 +512,7 @@ def main():
                 env_name=args.env_name,
                 n_iter=args.n_iter,
                 gamma=args.discount,
+                gae_lambda=args.gae_lambda,
                 min_timesteps_per_batch=args.batch_size,
                 max_path_length=max_path_length,
                 learning_rate=args.learning_rate,
