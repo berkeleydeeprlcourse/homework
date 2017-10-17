@@ -12,6 +12,10 @@ from multiprocessing import Process
 # Utilities
 #============================================================================================#
 
+def normalize(data, mean=0.0, std=1.0):
+    n_data = (data - np.mean(data)) / (np.std(data) + 1e-8)
+    return n_data * (std + 1e-8) + mean
+
 def build_mlp(
         input_placeholder, 
         output_size,
@@ -211,7 +215,7 @@ def train_PG(exp_name='',
 
     # Loss function that we'll differentiate to get the policy gradient.
     # Note: no gradient will flow through sy_adv_n, because it's a placeholder.
-    loss = tf.reduce_sum(-sy_logprob_n * sy_adv_n)
+    loss = tf.reduce_mean(-sy_logprob_n * sy_adv_n)
 
     update_op = tf.train.AdamOptimizer(learning_rate).minimize(loss)
 
@@ -380,10 +384,7 @@ def train_PG(exp_name='',
             # #bl2 below.)
 
             b_n = sess.run(baseline_prediction, feed_dict={sy_ob_no : ob_no})
-            b_n -= np.mean(b_n)
-            b_n /= np.linalg.norm(b_n)
-            b_n *= np.linalg.norm(q_n - np.mean(q_n))
-            b_n += np.mean(q_n)
+            b_n = normalize(b_n, np.mean(q_n), np.std(q_n))
 
             # Generalized advantage estimation
             adv_n = []
@@ -406,6 +407,9 @@ def train_PG(exp_name='',
                 if not reward_to_go:
                     adv_path = [adv_path[0]] * len(adv_path)
                 adv_n.extend(adv_path)
+
+            # Compute a GAE version of q_n to use when fitting the baseline
+            q_n = b_n + adv_n
         else:
             adv_n = q_n.copy()
 
@@ -418,8 +422,7 @@ def train_PG(exp_name='',
             # On the next line, implement a trick which is known empirically to reduce variance
             # in policy gradient methods: normalize adv_n to have mean zero and std=1.
             # YOUR_CODE_HERE
-            adv_n -= np.mean(adv_n)
-            adv_n /= np.linalg.norm(adv_n)
+            adv_n = normalize(adv_n)
 
 
         #====================================================================================#
@@ -438,8 +441,7 @@ def train_PG(exp_name='',
             # targets to have mean zero and std=1. (Goes with Hint #bl1 above.)
 
             # YOUR_CODE_HERE
-            q_normalized_n = q_n - np.mean(q_n)
-            q_normalized_n /= np.linalg.norm(q_normalized_n)
+            q_normalized_n = normalize(q_n)
             sess.run(baseline_update_op, feed_dict={sy_ob_no : ob_no, sy_target_n : q_normalized_n})
 
         #====================================================================================#
