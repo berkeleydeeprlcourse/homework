@@ -1,6 +1,7 @@
 import numpy as np
 import tensorflow as tf
 import gym
+import roboschool
 import logz
 import scipy.signal
 import os
@@ -196,7 +197,7 @@ def train_PG(exp_name='',
         # Compute Gaussian stochastic policy over continuous actions.
         # The mean is a function of observations, while the variance is not.
         sy_mean_na = build_mlp(sy_ob_no, ac_dim, "policy", n_layers=n_layers, size=size)
-        sy_logstd = tf.Variable(tf.zeros([1, ac_dim]), name="policy/logstd", dtype=float32)
+        sy_logstd = tf.Variable(tf.zeros([1, ac_dim]), name="policy/logstd", dtype=tf.float32)
         sy_std = tf.exp(sy_logstd)
 
         # Sample an action from the stochastic policy
@@ -204,7 +205,8 @@ def train_PG(exp_name='',
         sy_sampled_nac = sy_mean_na + sy_std * sy_sampled_z
 
         # Likelihood of chosen action
-        sy_logprob_n = -0.5 * tf.reduce_sum(tf.square(sy_sampled_z), axis=1)
+        sy_z = (sy_nac - sy_mean_na) / sy_std
+        sy_logprob_n = -0.5 * tf.reduce_sum(tf.square(sy_z), axis=1)
 
 
 
@@ -215,7 +217,7 @@ def train_PG(exp_name='',
 
     # Loss function that we'll differentiate to get the policy gradient.
     # Note: no gradient will flow through sy_adv_n, because it's a placeholder.
-    loss = tf.reduce_mean(-sy_logprob_n * sy_adv_n)
+    loss = -tf.reduce_mean(sy_logprob_n * sy_adv_n)
 
     update_op = tf.train.AdamOptimizer(learning_rate).minimize(loss)
 

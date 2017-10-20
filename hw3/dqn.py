@@ -210,8 +210,8 @@ def learn(env,
         if not model_initialized or random.random() < exploration.value(t):
             action = random.randint(0, num_actions - 1)
         else:
-            q_now = np.expand_dims(replay_buffer.encode_recent_observation(), axis=0)
-            action = session.run(greedy_action, {obs_t_float: q_now})
+            obs = replay_buffer.encode_recent_observation()
+            action = session.run(greedy_action, {obs_t_ph: [obs]})
         
         next_obs, reward, done, _ = env.step(action)
         if done:
