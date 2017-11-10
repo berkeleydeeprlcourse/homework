@@ -35,7 +35,11 @@ def build_mlp(
 
     with tf.variable_scope(scope):
         # YOUR_CODE_HERE
-        pass
+        input = input_placeholder
+        for i in range(n_layers-1):
+            input = tf.layers.dense(inputs=input, units=size, activation=activation)
+        output = tf.layers.dense(inputs=input, units=output_size, activation=output_activation)
+    return output
 
 def pathlength(path):
     return len(path["reward"])
@@ -123,7 +127,7 @@ def train_PG(exp_name='',
         sy_ac_na = tf.placeholder(shape=[None, ac_dim], name="ac", dtype=tf.float32) 
 
     # Define a placeholder for advantages
-    sy_adv_n = TODO
+    sy_adv_n = tf.placeholder(shape=[None], name="adv", dtype=tf.float32)
 
 
     #========================================================================================#
@@ -166,17 +170,16 @@ def train_PG(exp_name='',
     #========================================================================================#
 
     if discrete:
-        # YOUR_CODE_HERE
-        sy_logits_na = TODO
-        sy_sampled_ac = TODO # Hint: Use the tf.multinomial op
-        sy_logprob_n = TODO
+        # Use a shadow NN to build logits
+        sy_logits_na = build_mlp(sy_ob_no, ac_dim, scope="")
+        sy_sampled_ac = tf.multinomial(sy_logits_na, 1, seed=seed) # Hint: Use the tf.multinomial op
+        sy_logprob_n = tf.gather(tf.nn.log_softmax(sy_logits_na), sy_ac_na)
 
     else:
-        # YOUR_CODE_HERE
-        sy_mean = TODO
-        sy_logstd = TODO # logstd should just be a trainable variable, not a network output.
-        sy_sampled_ac = TODO
-        sy_logprob_n = TODO  # Hint: Use the log probability under a multivariate gaussian. 
+        sy_mean = build_mlp(sy_ob_no, ac_dim, scope="")
+        sy_logstd = tf.get_variable(name="logstd", shape=[ac_dim]) # logstd should just be a trainable variable, not a network output.
+        sy_sampled_ac = tf.add(tf.multiply(tf.random_normal(shape=[None, ac_dim]), sy_logstd), sy_mean)
+        sy_logprob_n = tf.contrib.distributions.MultivariateNormalDiag(loc=sy_mean, scale_diag=sy_logstd).log_prob(sy_ac_na) 
 
 
 
@@ -184,8 +187,9 @@ def train_PG(exp_name='',
     #                           ----------SECTION 4----------
     # Loss Function and Training Operation
     #========================================================================================#
-
-    loss = TODO # Loss function that we'll differentiate to get the policy gradient.
+    
+    # Loss function that we'll differentiate to get the policy gradient.
+    loss = -tf.reduce_mean(tf.multiply(sy_logprob_n, sy_adv_n))
     update_op = tf.train.AdamOptimizer(learning_rate).minimize(loss)
 
 
