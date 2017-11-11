@@ -208,7 +208,9 @@ def train_PG(exp_name='',
         # Define placeholders for targets, a loss function and an update op for fitting a 
         # neural network baseline. These will be used to fit the neural network baseline. 
         # YOUR_CODE_HERE
-        baseline_update_op = TODO
+        targets = tf.placeholder(shape=[None], name="baseline_targets", dtype=tf.float32)
+        baseline_loss = tf.nn.l2_loss(baseline_prediction-targets)
+        baseline_update_op = tf.train.Adamoptimizer(learning_rate).minimize(baseline_loss)
 
 
     #========================================================================================#
@@ -321,7 +323,17 @@ def train_PG(exp_name='',
         #====================================================================================#
 
         # YOUR_CODE_HERE
-        q_n = TODO
+        def cum_rewards(rewards, to_go):
+            if to_go:
+                # Build the cumulative reward backward
+                reward = []
+                for i in range(len(rewards)):
+                    reward.append(np.sum([np.power(gamma, j-i)*rewards[j] for j in range(i, len(rewards))]))
+                return reward
+            else:
+                return np.ones(len(rewards)) * np.sum([np.power(gamma, i)*rewards[i] for i in range(len(rewards))])
+           
+        q_n = np.concatenate([cum_rewards(path["reward"], reward_to_go) for path in paths])
 
         #====================================================================================#
         #                           ----------SECTION 5----------
