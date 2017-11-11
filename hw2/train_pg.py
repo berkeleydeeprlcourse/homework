@@ -208,8 +208,8 @@ def train_PG(exp_name='',
         # Define placeholders for targets, a loss function and an update op for fitting a 
         # neural network baseline. These will be used to fit the neural network baseline. 
         # YOUR_CODE_HERE
-        targets = tf.placeholder(shape=[None], name="baseline_targets", dtype=tf.float32)
-        baseline_loss = tf.nn.l2_loss(baseline_prediction-targets)
+        target_n = tf.placeholder(shape=[None], name="baseline_targets", dtype=tf.float32)
+        baseline_loss = tf.nn.l2_loss(baseline_prediction-target_n)
         baseline_update_op = tf.train.Adamoptimizer(learning_rate).minimize(baseline_loss)
 
 
@@ -326,9 +326,10 @@ def train_PG(exp_name='',
         def cum_rewards(rewards, to_go):
             if to_go:
                 # Build the cumulative reward backward
-                reward = []
-                for i in range(len(rewards)):
-                    reward.append(np.sum([np.power(gamma, j-i)*rewards[j] for j in range(i, len(rewards))]))
+                reward = np.zeros(len(rewards))
+                reward[-1] = np.power(gamma, len(rewards)-1)*rewards[-1]
+                for i in range(len(rewards)-2, -1, -1):
+                    reward[i] = reward[i+1] + np.power(gamma, i)*rewards[i]
                 return reward
             else:
                 return np.ones(len(rewards)) * np.sum([np.power(gamma, i)*rewards[i] for i in range(len(rewards))])
@@ -349,7 +350,11 @@ def train_PG(exp_name='',
             # (mean and std) of the current or previous batch of Q-values. (Goes with Hint
             # #bl2 below.)
 
-            b_n = TODO
+            b_n = baseline_prediction
+            # Compute the mean and std of q_n, it is just an np array
+            mean_q, std_q = np.mean(q_n), np.std(q_n)
+            mean_b, std_b = np.mean(b_n), np.std(b_n)
+            b_n = tf.nn.batch_normalization(b_n, mean_b, std_b, mean_q, std_q, 1e-15)
             adv_n = q_n - b_n
         else:
             adv_n = q_n.copy()
@@ -363,7 +368,8 @@ def train_PG(exp_name='',
             # On the next line, implement a trick which is known empirically to reduce variance
             # in policy gradient methods: normalize adv_n to have mean zero and std=1. 
             # YOUR_CODE_HERE
-            pass
+            mean_adv, std_adv = np.mean(adv_n), np.std(adv_n)
+            adv_n = (adv_n - mean_adv) / std_adv
 
 
         #====================================================================================#
@@ -382,7 +388,11 @@ def train_PG(exp_name='',
             # targets to have mean zero and std=1. (Goes with Hint #bl1 above.)
 
             # YOUR_CODE_HERE
-            pass
+            mean_q, std_q = np.mean(q_n), np.std(q_n)
+            targets = (q_n - mean_q) / std_q
+            # Feed targets to baseline model
+            feed_dict = {sy_ob_no:ob_no, target_n:targets}
+            sess.run(baseline_update_op, feed_dict=feed_dict)
 
         #====================================================================================#
         #                           ----------SECTION 4----------
@@ -396,9 +406,12 @@ def train_PG(exp_name='',
         # and after an update, and then log them below. 
 
         # YOUR_CODE_HERE
-
+        feed_dict = {sy_ob_no:ob_no, sy_ac_na:ac_na, sy_adv_n:adv_n}
+        loss_to_debug, _ = sess.run([loss, update_op], feed_dict=feed_dict)
 
         # Log diagnostics
+        # Log the loss
+        logz.log_tabular("Policy loss", loss_to_debug)
         returns = [path["reward"].sum() for path in paths]
         ep_lengths = [pathlength(path) for path in paths]
         logz.log_tabular("Time", time.time() - start)
