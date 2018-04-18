@@ -1,33 +1,78 @@
+"""Main script which implements policy gradients.
+
+.. note::
+
+    If you want to visualize with tensorboard run
+
+    .. code-block:: bash
+
+        pip install pycrayon
+        docker pull alband/crayon
+        # Tensorboard will be served on localhost:9118
+        docker run -p 9118:8888 -p 9119:8889 --name crayon alband/crayon
+
+    Each expt run will show up on tb as
+    ``{exp_name}-{i};{datetime}_{hostname}`` where i is the expt number
+    or ``avg`` for the average of all the runs.
+
+    If you don't want to use tensorboard, just run the script with the
+    ``--no_tb`` cmd line arg.
+
+Sample Usage
+============
+
+.. code-block::
+
+     python train_pg.py InvertedPendulum-v1 \
+        --n_iter 100 \
+        --batch_size 5000 \
+        --n_experiments 5 \
+        --exp_name py2-invpen-lr0.01 \
+        --n_layers 3 \
+        --size 64 \
+         --discount 0.99 \
+         --learning_rate 0.001 \
+        --reward_to_go \
+        --num_parallel 5
+
+Try --num_parallel to 1 while debugging, multiprocessing often produces
+arcane errors. Add flag ``--no_tb`` to run the script without a
+tensorboard running. Use the flag ``--clear_tb_expt`` to clear out existing
+experiments in tensorboard.
+"""
+import argparse
+import multiprocessing
 import numpy as np
 import tensorflow as tf
 import gym
 import logz
 import scipy.signal
 import os
+import tensorboard_pycrayon as tb
 import time
 import inspect
-from multiprocessing import Process
+
 
 #============================================================================================#
 # Utilities
 #============================================================================================#
 
 def build_mlp(
-        input_placeholder, 
-        output_size,
-        scope, 
-        n_layers=2, 
-        size=64, 
-        activation=tf.tanh,
-        output_activation=None
-        ):
+    input_placeholder,
+    output_size,
+    scope,
+    n_layers=2,
+    size=64,
+    activation=tf.tanh,
+    output_activation=None,
+):
     #========================================================================================#
     #                           ----------SECTION 3----------
     # Network building
     #
     # Your code should make a feedforward neural network (also called a multilayer perceptron)
-    # with 'n_layers' hidden layers of size 'size' units. 
-    # 
+    # with 'n_layers' hidden layers of size 'size' units.
+    #
     # The output layer should have size 'output_size' and activation 'output_activation'.
     #
     # Hint: use tf.layers.dense
@@ -37,35 +82,46 @@ def build_mlp(
         # YOUR_CODE_HERE
         pass
 
-def pathlength(path):
-    return len(path["reward"])
 
+def pathlength(path):
+    return len(path['reward'])
 
 
 #============================================================================================#
 # Policy Gradient
 #============================================================================================#
 
-def train_PG(exp_name='',
-             env_name='CartPole-v0',
-             n_iter=100, 
-             gamma=1.0, 
-             min_timesteps_per_batch=1000, 
-             max_path_length=None,
-             learning_rate=5e-3, 
-             reward_to_go=True, 
-             animate=True, 
-             logdir=None, 
-             normalize_advantages=True,
-             nn_baseline=False, 
-             seed=0,
-             # network arguments
-             n_layers=1,
-             size=32
-             ):
-
+def train_PG(
+    exp_name='',
+    env_name='CartPole-v0',
+    n_iter=100,
+    gamma=1.0,
+    min_timesteps_per_batch=1000,
+    max_path_length=None,
+    learning_rate=5e-3,
+    reward_to_go=True,
+    animate=True,
+    logdir=None,
+    normalize_advantages=True,
+    nn_baseline=False,
+    seed=0,
+    use_tensorboard=True,
+    # network arguments
+    n_layers=1,
+    size=32,
+):
+    # This will be returned by this function.  This will be
+    # used to compute the average losses across expts to be plotted
+    # in tensorboard.
+    # Example:
+    #   {
+    #       # List lengths num_iteraions
+    #       "loss": [1,1,2...,],
+    #       "Return/Average": [3,9,2...,],
+    #       "Time": [1,2,3...,],
+    #   }
+    history_dict = {}
     start = time.time()
-
     # Configure output directory for logging
     logz.configure_output_dir(logdir)
 
@@ -74,33 +130,36 @@ def train_PG(exp_name='',
     locals_ = locals()
     params = {k: locals_[k] if k in locals_ else None for k in args}
     logz.save_params(params)
-
+    tb_expt = tb.get_experiment(name=exp_name) if use_tensorboard else None
     # Set random seeds
     tf.set_random_seed(seed)
     np.random.seed(seed)
 
     # Make the gym environment
     env = gym.make(env_name)
-    
+
     # Is this env continuous, or discrete?
     discrete = isinstance(env.action_space, gym.spaces.Discrete)
 
     # Maximum length for episodes
-    max_path_length = max_path_length or env.spec.max_episode_steps
+    if not max_path_length:
+        max_path_length = env.spec.tags.get(
+            'wrapper_config.TimeLimit.max_episode_steps',
+        )
 
     #========================================================================================#
     # Notes on notation:
-    # 
+    #
     # Symbolic variables have the prefix sy_, to distinguish them from the numerical values
     # that are computed later in the function
-    # 
+    #
     # Prefixes and suffixes:
-    # ob - observation 
+    # ob - observation
     # ac - action
     # _no - this tensor should have shape (batch size /n/, observation dim)
     # _na - this tensor should have shape (batch size /n/, action dim)
     # _n  - this tensor should have shape (batch size /n/)
-    # 
+    #
     # Note: batch size /n/ is defined at runtime, and until then, the shape for that axis
     # is None
     #========================================================================================#
@@ -112,15 +171,15 @@ def train_PG(exp_name='',
     #========================================================================================#
     #                           ----------SECTION 4----------
     # Placeholders
-    # 
+    #
     # Need these for batch observations / actions / advantages in policy gradient loss function.
     #========================================================================================#
 
     sy_ob_no = tf.placeholder(shape=[None, ob_dim], name="ob", dtype=tf.float32)
     if discrete:
-        sy_ac_na = tf.placeholder(shape=[None], name="ac", dtype=tf.int32) 
+        sy_ac_na = tf.placeholder(shape=[None], name="ac", dtype=tf.int32)
     else:
-        sy_ac_na = tf.placeholder(shape=[None, ac_dim], name="ac", dtype=tf.float32) 
+        sy_ac_na = tf.placeholder(shape=[None, ac_dim], name="ac", dtype=tf.float32)
 
     # Define a placeholder for advantages
     sy_adv_n = TODO
@@ -129,12 +188,12 @@ def train_PG(exp_name='',
     #========================================================================================#
     #                           ----------SECTION 4----------
     # Networks
-    # 
+    #
     # Make symbolic operations for
     #   1. Policy network outputs which describe the policy distribution.
     #       a. For the discrete case, just logits for each action.
     #
-    #       b. For the continuous case, the mean / log std of a Gaussian distribution over 
+    #       b. For the continuous case, the mean / log std of a Gaussian distribution over
     #          actions.
     #
     #      Hint: use the 'build_mlp' function you defined in utilities.
@@ -157,12 +216,12 @@ def train_PG(exp_name='',
     #
     #      Note: these ops should be functions of the policy network output ops.
     #
-    #   3. Computing the log probability of a set of actions that were actually taken, 
+    #   3. Computing the log probability of a set of actions that were actually taken,
     #      according to the policy.
     #
-    #      Note: these ops should be functions of the placeholder 'sy_ac_na', and the 
+    #      Note: these ops should be functions of the placeholder 'sy_ac_na', and the
     #      policy network output ops.
-    #   
+    #
     #========================================================================================#
 
     if discrete:
@@ -176,8 +235,9 @@ def train_PG(exp_name='',
         sy_mean = TODO
         sy_logstd = TODO # logstd should just be a trainable variable, not a network output.
         sy_sampled_ac = TODO
-        sy_logprob_n = TODO  # Hint: Use the log probability under a multivariate gaussian. 
-
+        # Hint: Use the log probability under a multivariate gaussian.
+        # Also remember to use the `sy_ac_na` actions and not the smapled actions here.
+        sy_logprob_n = TODO
 
 
     #========================================================================================#
@@ -195,14 +255,17 @@ def train_PG(exp_name='',
     #========================================================================================#
 
     if nn_baseline:
-        baseline_prediction = tf.squeeze(build_mlp(
-                                sy_ob_no, 
-                                1, 
-                                "nn_baseline",
-                                n_layers=n_layers,
-                                size=size))
-        # Define placeholders for targets, a loss function and an update op for fitting a 
-        # neural network baseline. These will be used to fit the neural network baseline. 
+        baseline_prediction = tf.squeeze(
+            build_mlp(
+                input_placeholder=sy_ob_no,
+                output_size=1,
+                scope='nn_baseline',
+                n_layers=n_layers,
+                size=size,
+            ),
+        )
+        # Define placeholders for targets, a loss function and an update op for fitting a
+        # neural network baseline. These will be used to fit the neural network baseline.
         # YOUR_CODE_HERE
         baseline_update_op = TODO
 
@@ -211,7 +274,7 @@ def train_PG(exp_name='',
     # Tensorflow Engineering: Config, Session, Variable initialization
     #========================================================================================#
 
-    tf_config = tf.ConfigProto(inter_op_parallelism_threads=1, intra_op_parallelism_threads=1) 
+    tf_config = tf.ConfigProto(inter_op_parallelism_threads=1, intra_op_parallelism_threads=1)
 
     sess = tf.Session(config=tf_config)
     sess.__enter__() # equivalent to `with sess:`
@@ -249,16 +312,18 @@ def train_PG(exp_name='',
                 steps += 1
                 if done or steps > max_path_length:
                     break
-            path = {"observation" : np.array(obs), 
-                    "reward" : np.array(rewards), 
-                    "action" : np.array(acs)}
+            path = {
+                'observation' : np.array(obs),
+                'reward' : np.array(rewards),
+                'action' : np.array(acs),
+            }
             paths.append(path)
             timesteps_this_batch += pathlength(path)
             if timesteps_this_batch > min_timesteps_per_batch:
                 break
         total_timesteps += timesteps_this_batch
 
-        # Build arrays for observation, action for the policy gradient update by concatenating 
+        # Build arrays for observation, action for the policy gradient update by concatenating
         # across paths
         ob_no = np.concatenate([path["observation"] for path in paths])
         ac_na = np.concatenate([path["action"] for path in paths])
@@ -268,26 +333,26 @@ def train_PG(exp_name='',
         # Computing Q-values
         #
         # Your code should construct numpy arrays for Q-values which will be used to compute
-        # advantages (which will in turn be fed to the placeholder you defined above). 
+        # advantages (which will in turn be fed to the placeholder you defined above).
         #
         # Recall that the expression for the policy gradient PG is
         #
         #       PG = E_{tau} [sum_{t=0}^T grad log pi(a_t|s_t) * (Q_t - b_t )]
         #
-        # where 
+        # where
         #
         #       tau=(s_0, a_0, ...) is a trajectory,
         #       Q_t is the Q-value at time t, Q^{pi}(s_t, a_t),
-        #       and b_t is a baseline which may depend on s_t. 
+        #       and b_t is a baseline which may depend on s_t.
         #
         # You will write code for two cases, controlled by the flag 'reward_to_go':
         #
-        #   Case 1: trajectory-based PG 
+        #   Case 1: trajectory-based PG
         #
         #       (reward_to_go = False)
         #
-        #       Instead of Q^{pi}(s_t, a_t), we use the total discounted reward summed over 
-        #       entire trajectory (regardless of which time step the Q-value should be for). 
+        #       Instead of Q^{pi}(s_t, a_t), we use the total discounted reward summed over
+        #       entire trajectory (regardless of which time step the Q-value should be for).
         #
         #       For this case, the policy gradient estimator is
         #
@@ -301,7 +366,7 @@ def train_PG(exp_name='',
         #
         #           Q_t = Ret(tau)
         #
-        #   Case 2: reward-to-go PG 
+        #   Case 2: reward-to-go PG
         #
         #       (reward_to_go = True)
         #
@@ -312,7 +377,7 @@ def train_PG(exp_name='',
         #
         #
         # Store the Q-values for all timesteps and all trajectories in a variable 'q_n',
-        # like the 'ob_no' and 'ac_na' above. 
+        # like the 'ob_no' and 'ac_na' above.
         #
         #====================================================================================#
 
@@ -345,7 +410,7 @@ def train_PG(exp_name='',
 
         if normalize_advantages:
             # On the next line, implement a trick which is known empirically to reduce variance
-            # in policy gradient methods: normalize adv_n to have mean zero and std=1. 
+            # in policy gradient methods: normalize adv_n to have mean zero and std=1.
             # YOUR_CODE_HERE
             pass
 
@@ -356,13 +421,13 @@ def train_PG(exp_name='',
         #====================================================================================#
         if nn_baseline:
             # ----------SECTION 5----------
-            # If a neural network baseline is used, set up the targets and the inputs for the 
-            # baseline. 
-            # 
-            # Fit it to the current batch in order to use for the next iteration. Use the 
+            # If a neural network baseline is used, set up the targets and the inputs for the
+            # baseline.
+            #
+            # Fit it to the current batch in order to use for the next iteration. Use the
             # baseline_update_op you defined earlier.
             #
-            # Hint #bl2: Instead of trying to target raw Q-values directly, rescale the 
+            # Hint #bl2: Instead of trying to target raw Q-values directly, rescale the
             # targets to have mean zero and std=1. (Goes with Hint #bl1 above.)
 
             # YOUR_CODE_HERE
@@ -373,34 +438,59 @@ def train_PG(exp_name='',
         # Performing the Policy Update
         #====================================================================================#
 
-        # Call the update operation necessary to perform the policy gradient update based on 
+        # Call the update operation necessary to perform the policy gradient update based on
         # the current batch of rollouts.
-        # 
+        #
         # For debug purposes, you may wish to save the value of the loss function before
-        # and after an update, and then log them below. 
+        # and after an update, and then log them below.
 
         # YOUR_CODE_HERE
 
-
+        loss_val = TODO
         # Log diagnostics
-        returns = [path["reward"].sum() for path in paths]
-        ep_lengths = [pathlength(path) for path in paths]
-        logz.log_tabular("Time", time.time() - start)
-        logz.log_tabular("Iteration", itr)
-        logz.log_tabular("AverageReturn", np.mean(returns))
-        logz.log_tabular("StdReturn", np.std(returns))
-        logz.log_tabular("MaxReturn", np.max(returns))
-        logz.log_tabular("MinReturn", np.min(returns))
-        logz.log_tabular("EpLenMean", np.mean(ep_lengths))
-        logz.log_tabular("EpLenStd", np.std(ep_lengths))
-        logz.log_tabular("TimestepsThisBatch", timesteps_this_batch)
-        logz.log_tabular("TimestepsSoFar", total_timesteps)
+        logz.log_actions(actions=ac_na, tb_expt=tb_expt)
+        history_dict = logz.log_value_scalars(
+            itr=itr,
+            start_time=start,
+            returns=[path['reward'].sum() for path in paths],
+            loss_val=loss_val,
+            ep_lengths=[pathlength(path) for path in paths],
+            timesteps_this_batch=timesteps_this_batch,
+            total_timesteps=total_timesteps,
+            tb_expt=tb_expt,
+            history_dict=history_dict,
+        )
         logz.dump_tabular()
         logz.pickle_tf_vars()
+    return history_dict
 
 
 def main():
-    import argparse
+    params = parse_args()
+    if not(os.path.exists('data')):
+        os.makedirs('data')
+    if params.use_tensorboard and params.clear_tb_expt:
+        tb.clear_expts()
+    train_kwargs_list = create_train_kwargs_list(params=params)
+    # Don't use multiprocessing for a single process or experiment as
+    # multiprocessing often produces arcane error tracebacks.
+    if params.num_parallel > 1:
+        n_procs = min(params.num_parallel, len(train_kwargs_list))
+        map_func = multiprocessing.Pool(processes=n_procs).map
+    else:
+        map_func = map
+    history_dicts = list(map_func(train_PG_star, train_kwargs_list))
+    if params.use_tensorboard:
+        # Average all the runs performance and plot on tensorboard.
+        logz.plot_tb_avg_history(
+            tb_avg_expt=tb.get_experiment(
+                '{}-{}'.format(params.exp_name, 'avg'),
+            ),
+            history_dicts=history_dicts,
+        )
+
+
+def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('env_name', type=str)
     parser.add_argument('--exp_name', type=str, default='vpg')
@@ -414,47 +504,107 @@ def main():
     parser.add_argument('--dont_normalize_advantages', '-dna', action='store_true')
     parser.add_argument('--nn_baseline', '-bl', action='store_true')
     parser.add_argument('--seed', type=int, default=1)
-    parser.add_argument('--n_experiments', '-e', type=int, default=1)
+    parser.add_argument(
+        '--n_experiments',
+        '-e',
+        help=(
+            'Number of times to run with different randomization seeds'
+            'to average performance'
+        ),
+        type=int,
+        default=1,
+    )
     parser.add_argument('--n_layers', '-l', type=int, default=1)
     parser.add_argument('--size', '-s', type=int, default=32)
-    args = parser.parse_args()
+    parser.add_argument(
+        '--num_parallel',
+        '-np',
+        help=(
+            'If running multiple experiments with different inital random seed'
+            'and if the `num_parallel` is set, we parallelize the learning'
+        ),
+        type=int,
+        default=1,
+    )
+    parser.add_argument('--clear_tb_expt', '-ctb', default=False, action='store_true')
+    parser.add_argument(
+        '--no_tb',
+        dest='use_tensorboard',
+        help='Whether to not use tensorboard.',
+        default=True,
+        action='store_false',
+    )
+    return parser.parse_args()
 
-    if not(os.path.exists('data')):
-        os.makedirs('data')
-    logdir = args.exp_name + '_' + args.env_name + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
+
+def create_train_kwargs_list(params):
+    """Creates parameters for each expt run with a different random seed.
+
+    :param params: As parsed by :func:`_parse_args`.
+    :type params: namedtuple or class
+
+    :returns: Returns a list of different kwargs to be passed into
+        :func:`train_PG` for each expt run.
+    :rtype: list(dict(str, object))
+
+    Sample Output::
+
+        [
+            {
+                'exp_name': 'abc-0',
+                'env_name': 'Cart-Pole-v0',
+                ...
+                'seed': 0,
+                'use_tensorboard': False,
+            },
+            {
+                'exp_name': 'abc-1',
+                'env_name': 'Cart-Pole-v0',
+                ...
+                'seed': 10,
+                'use_tensorboard': False,
+            },
+        ]
+    """
+    logdir = '{exp_name}_{env_name}_{time}'.format(
+        exp_name=params.exp_name,
+        env_name=params.env_name,
+        time=time.strftime("%d-%m-%Y_%H-%M-%S"),
+    )
     logdir = os.path.join('data', logdir)
     if not(os.path.exists(logdir)):
         os.makedirs(logdir)
-
-    max_path_length = args.ep_len if args.ep_len > 0 else None
-
-    for e in range(args.n_experiments):
-        seed = args.seed + 10*e
-        print('Running experiment with seed %d'%seed)
-        def train_func():
-            train_PG(
-                exp_name=args.exp_name,
-                env_name=args.env_name,
-                n_iter=args.n_iter,
-                gamma=args.discount,
-                min_timesteps_per_batch=args.batch_size,
+    max_path_length = params.ep_len if params.ep_len > 0 else None
+    kwargs_list = []
+    for e in range(params.n_experiments):
+        seed = params.seed + 10 * e
+        print('Running experiment with seed %d' % seed)
+        kwargs_list.append(
+            dict(
+                exp_name='{}-{}'.format(params.exp_name, e),
+                env_name=params.env_name,
+                n_iter=params.n_iter,
+                gamma=params.discount,
+                min_timesteps_per_batch=params.batch_size,
                 max_path_length=max_path_length,
-                learning_rate=args.learning_rate,
-                reward_to_go=args.reward_to_go,
-                animate=args.render,
-                logdir=os.path.join(logdir,'%d'%seed),
-                normalize_advantages=not(args.dont_normalize_advantages),
-                nn_baseline=args.nn_baseline, 
+                learning_rate=params.learning_rate,
+                reward_to_go=params.reward_to_go,
+                animate=params.render,
+                logdir=os.path.join(logdir, '%d' % seed),
+                normalize_advantages=not(params.dont_normalize_advantages),
+                nn_baseline=params.nn_baseline,
                 seed=seed,
-                n_layers=args.n_layers,
-                size=args.size
-                )
-        # Awkward hacky process runs, because Tensorflow does not like
-        # repeatedly calling train_PG in the same thread.
-        p = Process(target=train_func, args=tuple())
-        p.start()
-        p.join()
-        
+                n_layers=params.n_layers,
+                size=params.size,
+                use_tensorboard=params.use_tensorboard,
+            ),
+        )
+    return kwargs_list
+
+
+def train_PG_star(train_kwargs):
+    return train_PG(**train_kwargs)
+
 
 if __name__ == "__main__":
     main()
