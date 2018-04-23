@@ -203,7 +203,7 @@ def train_PG(
         sy_logstd = tf.get_variable(name='logstd',
                                     shape=[],
                                     dtype=tf.float32)
-        sy_sampled_ac = sy_mean + tf.exp(sy_logstd) * tf.random_normal(shape=sy_mean.shape)
+        sy_sampled_ac = sy_mean + tf.exp(sy_logstd) * tf.random_normal(shape=tf.shape(sy_mean))
         sy_logprob_n = tf.reduce_sum(tf.square(sy_ac_na - sy_mean),
                                      axis=1) / (2.0 * tf.square(
                                         tf.exp(sy_logstd))) - ac_dim * sy_logstd
@@ -290,6 +290,10 @@ def train_PG(
         ob_no = np.concatenate([path["observation"] for path in paths])
         ac_na = np.concatenate([path["action"] for path in paths])
 
+        if not discrete and ac_dim == 1 and len(ac_na.shape) == 1:
+            ac_na = ac_na[:, np.newaxis]
+        if ob_dim == 1 and len(ob_no.shape) == 1:
+            ob_no = ob_no[:, np.newaxis]
         #====================================================================================#
         #                           ----------SECTION 4----------
         # Computing Q-values
