@@ -8,9 +8,9 @@ import time
 import inspect
 from multiprocessing import Process
 
-#============================================================================================#
+#=============================================================================#
 # Utilities
-#============================================================================================#
+#=============================================================================#
 
 
 def build_mlp(input_placeholder,
@@ -20,17 +20,20 @@ def build_mlp(input_placeholder,
               size=64,
               activation=tf.tanh,
               output_activation=None):
-    #========================================================================================#
+
+    #=========================================================================#
     #                           ----------SECTION 3----------
     # Network building
     #
-    # Your code should make a feedforward neural network (also called a multilayer perceptron)
+    # Your code should make a feedforward neural network (also called a
+    # multilayer perceptron)
     # with 'n_layers' hidden layers of size 'size' units.
     #
-    # The output layer should have size 'output_size' and activation 'output_activation'.
+    # The output layer should have size 'output_size' and activation
+    # 'output_activation'.
     #
     # Hint: use tf.layers.dense
-    #========================================================================================#
+    #=========================================================================#
 
     with tf.variable_scope(scope):
         # YOUR_CODE_HERE
@@ -50,9 +53,9 @@ def pathlength(path):
     return len(path["reward"])
 
 
-#============================================================================================#
+#=============================================================================#
 # Policy Gradient
-#============================================================================================#
+#=============================================================================#
 
 
 def train_PG(
@@ -97,11 +100,11 @@ def train_PG(
     # Maximum length for episodes
     max_path_length = max_path_length or env.spec.max_episode_steps
 
-    #========================================================================================#
+    #=========================================================================#
     # Notes on notation:
     #
-    # Symbolic variables have the prefix sy_, to distinguish them from the numerical values
-    # that are computed later in the function
+    # Symbolic variables have the prefix sy_, to distinguish them from the
+    # numerical values that are computed later in the function
     #
     # Prefixes and suffixes:
     # ob - observation
@@ -110,20 +113,21 @@ def train_PG(
     # _na - this tensor should have shape (batch size /n/, action dim)
     # _n  - this tensor should have shape (batch size /n/)
     #
-    # Note: batch size /n/ is defined at runtime, and until then, the shape for that axis
-    # is None
-    #========================================================================================#
+    # Note: batch size /n/ is defined at runtime, and until then, the shape for
+    # that axis is None
+    #=========================================================================#
 
     # Observation and action sizes
     ob_dim = env.observation_space.shape[0]
     ac_dim = env.action_space.n if discrete else env.action_space.shape[0]
 
-    #========================================================================================#
+    #=========================================================================#
     #                           ----------SECTION 4----------
     # Placeholders
     #
-    # Need these for batch observations / actions / advantages in policy gradient loss function.
-    #========================================================================================#
+    # Need these for batch observations / actions / advantages in policy
+    # gradient loss function.
+    #=========================================================================#
 
     sy_ob_no = tf.placeholder(
         shape=[None, ob_dim], name="ob", dtype=tf.float32)
@@ -136,7 +140,7 @@ def train_PG(
     # Define a placeholder for advantages
     sy_adv_n = tf.placeholder(shape=[None], name="adv", dtype=tf.float32)
 
-    #========================================================================================#
+    #=========================================================================#
     #                           ----------SECTION 4----------
     # Networks
     #
@@ -144,36 +148,38 @@ def train_PG(
     #   1. Policy network outputs which describe the policy distribution.
     #       a. For the discrete case, just logits for each action.
     #
-    #       b. For the continuous case, the mean / log std of a Gaussian distribution over
-    #          actions.
+    #       b. For the continuous case, the mean / log std of a Gaussian
+    #          distribution over actions.
     #
     #      Hint: use the 'build_mlp' function you defined in utilities.
     #
     #      Note: these ops should be functions of the placeholder 'sy_ob_no'
     #
     #   2. Producing samples stochastically from the policy distribution.
-    #       a. For the discrete case, an op that takes in logits and produces actions.
-    #
+    #       a. For the discrete case, an op that takes in logits and produces
+    #          actions.
     #          Should have shape [None]
     #
     #       b. For the continuous case, use the reparameterization trick:
-    #          The output from a Gaussian distribution with mean 'mu' and std 'sigma' is
+    #          The output from a Gaussian distribution with mean 'mu' and std
+    #          'sigma' is
     #
     #               mu + sigma * z,         z ~ N(0, I)
     #
-    #          This reduces the problem to just sampling z. (Hint: use tf.random_normal!)
+    #          This reduces the problem to just sampling z.
+    #          (Hint: use tf.random_normal!)
     #
     #          Should have shape [None, ac_dim]
     #
-    #      Note: these ops should be functions of the policy network output ops.
+    #      Note: these ops should be functions of the policy network output.
     #
-    #   3. Computing the log probability of a set of actions that were actually taken,
-    #      according to the policy.
+    #   3. Computing the log probability of a set of actions that were actually
+    #      taken, according to the policy.
     #
-    #      Note: these ops should be functions of the placeholder 'sy_ac_na', and the
-    #      policy network output ops.
+    #      Note: these ops should be functions of the placeholder 'sy_ac_na',
+    #      and the policy network output ops.
     #
-    #========================================================================================#
+    #=========================================================================#
 
     if discrete:
         # YOUR_CODE_HERE
@@ -194,19 +200,29 @@ def train_PG(
 
     else:
         # YOUR_CODE_HERE
-        sy_mean = build_mlp(input_placeholder=sy_ob_no,
-                            output_size=ac_dim,
-                            scope='action_means',
-                            n_layers=n_layers,
-                            size=size)
+        sy_mean_na = build_mlp(input_placeholder=sy_ob_no,
+                               output_size=ac_dim,
+                               scope='action_means',
+                               n_layers=n_layers,
+                               size=size)
         # logstd should just be a trainable variable, not a network output.
-        sy_logstd = tf.get_variable(name='logstd',
-                                    shape=[],
-                                    dtype=tf.float32)
-        sy_sampled_ac = sy_mean + tf.exp(sy_logstd) * tf.random_normal(shape=tf.shape(sy_mean))
-        sy_logprob_n = tf.reduce_sum(tf.square(sy_ac_na - sy_mean),
-                                     axis=1) / (2.0 * tf.square(
-                                        tf.exp(sy_logstd))) - ac_dim * sy_logstd
+        _log_std_init_val = np.log((env.action_space.high -
+                                    env.action_space.low) / 30.0)
+        sy_logstd = tf.get_variable(
+                        name='logstd',
+                        shape=[ac_dim],
+                        dtype=tf.float32,
+                        initializer=tf.constant_initializer(_log_std_init_val),
+                        trainable=True)
+
+        sy_sampled_ac = sy_mean_na + tf.exp(sy_logstd) * tf.random_normal(
+                                                  shape=tf.shape(sy_mean_na))
+
+        # sy_logprob_n = - tf.reduce_sum(tf.square(sy_ac_na - sy_mean_na), -1) / (2.0 * tf.square(
+        #                                 tf.exp(sy_logstd))) - ac_dim * sy_logstd
+        sy_logprob_n = tf.contrib.distributions.MultivariateNormalDiag(
+                                       loc=sy_mean_na,
+                                       scale_diag=tf.exp(sy_logstd)).log_prob(sy_ac_na)
 
     #========================================================================================#
     #                           ----------SECTION 4----------
@@ -266,8 +282,11 @@ def train_PG(
                     time.sleep(0.05)
                 obs.append(ob)
                 ac = sess.run(sy_sampled_ac, feed_dict={sy_ob_no: ob[None]})
-                # ac = ac[0]
-                ac = int(ac)
+                try:
+                    ac = ac[0]
+                except IndexError:
+                    pass
+                # ac = float(ac)
                 acs.append(ac)
                 ob, rew, done, _ = env.step(ac)
                 rewards.append(rew)
@@ -366,7 +385,8 @@ def train_PG(
             q_n = np.array([])
             for path in paths:
                 path_discounts = np.cumprod(np.tile(gamma, reps=pathlength(path))) / gamma
-                q_n = np.concatenate((q_n, path_discounts * path['reward']))
+                path_return = (path_discounts * path['reward']).sum()
+                q_n = np.concatenate((q_n, np.tile(path_return, reps=pathlength(path))))
             q_n = q_n / len(paths)
 
         #====================================================================================#
@@ -397,7 +417,10 @@ def train_PG(
             # On the next line, implement a trick which is known empirically to reduce variance
             # in policy gradient methods: normalize adv_n to have mean zero and std=1.
             # YOUR_CODE_HERE
-            adv_n = (adv_n - adv_n.mean()) / adv_n.std()
+
+            # add an epsilon to the denominator to avoid division by zero:
+            epsilon = 1e-5
+            adv_n = (adv_n - adv_n.mean()) / (adv_n.std() + epsilon)
 
         #====================================================================================#
         #                           ----------SECTION 5----------
@@ -449,6 +472,8 @@ def train_PG(
         logz.log_tabular("LossAfterUpdate", loss_after_update)
         logz.log_tabular("TimestepsThisBatch", timesteps_this_batch)
         logz.log_tabular("TimestepsSoFar", total_timesteps)
+        if not discrete:
+            logz.log_tabular("Std", np.exp(sess.run(sy_logstd)))
         logz.dump_tabular()
         logz.pickle_tf_vars()
 
