@@ -17,8 +17,13 @@ import gym
 import load_policy
 
 def generate_all_rollout_data():
-    #generate_rollout_data('experts/HalfCheetah-v1.pkl', 'HalfCheetah-v1', 500, 1000, False, 'data/' )
+    generate_rollout_data('experts/HalfCheetah-v1.pkl', 'HalfCheetah-v1', 500, 1000, False, 'data/' )
     generate_rollout_data('experts/Hopper-v1.pkl', 'Hopper-v1', 500, 1000, False, 'data/' )
+    generate_rollout_data('experts/Ant-v1.pkl', 'Ant-v1', 500, 1000, False, 'data/' )
+    generate_rollout_data('experts/Humanoid-v1.pkl', 'Humanoid-v1', 500, 1000, False, 'data/' )
+    generate_rollout_data('experts/Reacher-v1.pkl', 'Reacher-v1', 500, 1000, False, 'data/' )
+    generate_rollout_data('experts/Walker2d-v1.pkl', 'Walker2d-v1', 500, 1000, False, 'data/' ) 
+
 
 def generate_rollout_data(expert_policy_file, env_name, max_timesteps, num_rollouts, render, output_dir):
     print('loading and building expert policy')
