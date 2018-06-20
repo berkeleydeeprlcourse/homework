@@ -87,3 +87,8 @@ ENV/
 
 # Rope project settings
 .ropeproject
+
+
+# HW1 files
+hw1/archive/
+hw1/results/
