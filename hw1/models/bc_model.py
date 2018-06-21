@@ -1,10 +1,16 @@
 import os
+import numpy as np
 import tensorflow as tf
-
-# TODO: pass in logger
+import tensorflow.contrib.slim as slim
+import itertools
 
 class Model:
-    def __init__(self, num_observations, num_actions, checkpoint_dir, optimizer, learning_rate):
+    def __init__(self, obs_samples, num_observations, num_actions, checkpoint_dir, logger, optimizer, learning_rate):
+        self.logger = logger
+
+        self.obs_mean = obs_samples.mean(axis=0)
+        self.obs_std = obs_samples.std(axis=0)
+
         self.num_observations = num_observations
         self.num_actions = num_actions
         
@@ -20,18 +26,18 @@ class Model:
         self.saver = tf.train.Saver(var_list=tf.global_variables())
 
     def save(self, sess):
-        print("Saving model...")
+        self.logger.info("Saving model...")
         if not os.path.exists(self.checkpoint_dir):
             os.makedirs(self.checkpoint_dir)
         self.saver.save(sess, self.checkpoint_dir + 'model', global_step=self.global_step_tensor)
-        print("Model saved")
+        self.logger.info("Model saved")
 
     def load(self, session):
         latest_checkpoint = tf.train.latest_checkpoint(self.checkpoint_dir)
         if latest_checkpoint:
-            print("Loading model checkpoint {} ...\n".format(latest_checkpoint))
+            self.logger.info("Loading model checkpoint {} ...\n".format(latest_checkpoint))
             self.saver.restore(session, latest_checkpoint)
-        print("Model loaded")
+        self.logger.info("Model loaded")
 
     def init_global_step(self):
         with tf.variable_scope('global_step'):
@@ -73,14 +79,22 @@ class Model:
     def build_model(self):
         parameters = []
 
-        a_fc1 = self.fc_layer(self.obs, self.num_observations, 128, 'fc1', parameters)
-        a_fc2 = self.fc_layer(a_fc1, 128, 128, 'fc2', parameters)
-        a_fc3 = self.fc_layer(a_fc2, 128, 128, 'fc3', parameters)
-        z_fc4 = self.fc_layer(a_fc3, 128, self.num_actions, 'fc4', parameters, activation = None)
-        return z_fc4, parameters
+        normalized = (self.obs - self.obs_mean) / self.obs_std
+
+        net = slim.fully_connected(normalized, 50, scope='fc1', activation_fn=tf.nn.relu)
+        net = slim.fully_connected(net, 50, scope='fc2', activation_fn=tf.nn.relu)
+        policy = slim.fully_connected(net, self.num_actions, activation_fn=None, scope='policy')
+
+
+
+        # a_fc1 = self.fc_layer(normalized, self.num_observations, 128, 'fc1', parameters)
+        # a_fc2 = self.fc_layer(a_fc1, 128, 128, 'fc2', parameters)
+        # a_fc3 = self.fc_layer(a_fc2, 128, 128, 'fc3', parameters)
+        # z_fc4 = self.fc_layer(a_fc3, 128, self.num_actions, 'fc4', parameters, activation = None)
+        return policy, parameters
 
     def get_optimizer(self, optimizer, learning_rate):
-        print("Using %s optimizer" % optimizer)
+        self.logger.info("Using %s optimizer" % optimizer)
         if optimizer == "adam":
             return tf.train.AdamOptimizer(learning_rate).minimize(self.loss,
                 global_step=self.global_step_tensor)
@@ -92,20 +106,35 @@ class Model:
                 global_step=self.global_step_tensor)
 
     def get_loss(self):
-        loss = tf.reduce_mean(tf.pow(self.pred - self.actions, 2)) / 2
+        loss = tf.reduce_mean(tf.reduce_sum((self.pred - self.actions)**2, axis=1))
+        # loss = tf.reduce_mean(tf.pow(self.pred - self.actions, 2)) / 2
         return loss
 
-    def step(self, sess, batch_x, batch_y=None, is_train=True):
-        feed_dict = {self.obs: batch_x}
-        if batch_y is not None:
-            feed_dict[self.actions] = batch_y
-        if is_train:
-            _, pred, loss = sess.run([self.optimizer, self.pred, self.loss], feed_dict=feed_dict)
-            return pred, loss
-        else:
-            if batch_y is not None:
-                pred, loss = sess.run([self.pred, self.loss], feed_dict=feed_dict)
-                return pred, loss
-            else:
-                pred = sess.run([self.pred], feed_dict=feed_dict)
-                return pred
+    def predict(self, sess, batch_x):
+        return sess.run(self.pred,
+                        feed_dict={self.obs:batch_x})
+
+    def update(self, sess, batch_x, batch_y):
+        loss, _ = sess.run([self.loss, self.optimizer],
+                          feed_dict={self.obs: batch_x,
+                                     self.actions: batch_y})
+        return loss
+
+    def test_run(self, sess, env, max_steps):
+        obvs = []
+        actions = []
+        reward = 0.
+
+        obv = env.reset()
+        for steps in itertools.count() :
+            obvs.append(obv)
+            actions.append(self.predict(sess, np.expand_dims(obv,axis=0))[0])
+            obv, r, done, _ = env.step(actions[-1])
+            reward += r
+            if steps >= max_steps or done:
+                break
+
+        experience = {'observations': np.stack(obvs,axis=0),
+                      'actions': np.squeeze(np.stack(actions,axis=0)),
+                      'reward':reward}
+        return experience
