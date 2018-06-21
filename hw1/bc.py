@@ -1,12 +1,13 @@
 from __future__ import print_function
 import os
-import sys
 import logging
 import argparse
+from tqdm import tqdm
 import tensorflow as tf
 import numpy as np
 import gym
 from gym import wrappers
+import load_policy
 
 from data.bc_data import Data
 from models.bc_model import Model
@@ -24,14 +25,10 @@ def config_logging(log_file):
     fh.setFormatter(formatter)
     logger.addHandler(fh)
 
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.INFO)
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
     return logger
 
-def create_model(session, num_observations, num_actions, logger, optimizer, learning_rate, restore, checkpoint_dir):
-    model = Model(num_observations, num_actions, checkpoint_dir, optimizer, learning_rate)
+def create_model(session, obs_samples, num_observations, num_actions, logger, optimizer, learning_rate, restore, checkpoint_dir):
+    model = Model(obs_samples, num_observations, num_actions, checkpoint_dir, logger, optimizer, learning_rate)
 
     if restore:
         model.load(session)
@@ -41,115 +38,166 @@ def create_model(session, num_observations, num_actions, logger, optimizer, lear
 
     return model
 
-def train(expert_data, log_dir, num_epochs, optimizer, learning_rate, env_name, batch_size, restore, val, checkpoint_dir):
-    logger = config_logging(log_dir + "bc_{}_train_out.log".format(env_name))
-
-    # split expert data into train and validation sets
-    data = Data(expert_data, train_ratio=0.9, val_ratio=0.05)
-    steps_per_print = 100
-
-    num_train = len(data.train['observations'])
-    num_batches_per_epoch = int((num_train - 1) / batch_size) + 1
-
-    # intialize avg loss and minimum validation loss
-    avg_loss, min_val_loss = 0, sys.maxsize
-
-    with tf.Session() as session:
-        model = create_model(session, data.num_observations, data.num_actions, logger, optimizer, learning_rate, restore, checkpoint_dir)
-
-        batches = data.batch_iter(data.train, batch_size, num_epochs)
-        for i, (batch_x, batch_y) in enumerate(batches):
-            pred, loss = model.step(session, batch_x, batch_y)
-
-            avg_loss += loss
-            num_epoch = i / num_batches_per_epoch
-
-            if i % steps_per_print == 0:
-                logger.debug("Epoch %04d step %08d loss %04f" % (num_epoch, i, loss))
-
-            if i > 0 and (i+1) % num_batches_per_epoch == 0:
-                avg_loss /= num_batches_per_epoch
-                logger.debug("###################################")
-                logger.info("Finished epoch %d, average training loss = %f" % (num_epoch, avg_loss))
-                if val:
-                    min_val_loss = validate(
-                        model, logger, session, data, num_epochs, batch_size, min_val_loss, checkpoint_dir)
-                logger.debug("###################################")
-                avg_loss = 0
-
-def validate(model, logger, session, data, num_epoch, batch_size, min_loss, checkpoint_dir):
-    batches = data.batch_iter(data.val, batch_size, 1)
-    avg_loss = []
-    for i, (batch_x, batch_y) in enumerate(batches):
-        pred, loss = model.step(session, batch_x, batch_y, is_train=False)
-        avg_loss.append(loss)
-    new_loss = sum(avg_loss) / len(avg_loss)
-    logger.info("Finished epoch %d, average validation loss = %f" % (num_epoch, new_loss))
-    if new_loss < min_loss:  # Only save model if val loss dropped
-        model.save(session)
-        logger.info("Model saved!")
-        min_loss = new_loss
-    return min_loss
-
-def test(expert_data, log_dir, optimizer, learning_rate, env_name, num_rollouts, checkpoint_dir):
-    logger = config_logging(log_dir + "bc_{}_test_out.log".format(env_name))
-
-    # create to get num_observations and num_actions for model
-    data = Data(expert_data, train_ratio=0.9, val_ratio=0.05)
-
-    with tf.Session() as session:
-        model = create_model(session, data.num_observations, data.num_actions, logger, optimizer, learning_rate, True, checkpoint_dir)
-        env = gym.make(env_name)
-        max_steps = env.spec.timestep_limit
-
-        returns, observations, actions = [], [], []
-        for i in range(num_rollouts):
-            print('iter', i)
+def gather_expert_experience(num_rollouts, env, policy_fn, max_steps):
+    with tf.Session():
+        returns = []
+        observations = []
+        actions = []
+        for i in tqdm(range(num_rollouts)):
             obs = env.reset()
             done = False
-            total_reward = 0.
+            totalr = 0.
             steps = 0
             while not done:
-                action = model.step(session, obs[None, :], is_train=False)
+                action = policy_fn(obs[None,:])
                 observations.append(obs)
                 actions.append(action)
                 obs, r, done, _ = env.step(action)
-                total_reward += r
+                totalr += r
                 steps += 1
-                env.render()
-                if steps % 100 == 0:
-                    print("%i/%i" % (steps, max_steps))
                 if steps >= max_steps:
                     break
-            returns.append(total_reward)
+            returns.append(totalr)
 
-        print('returns', returns)
-        print('mean return', np.mean(returns))
-    print('std of return', np.std(returns))
+        expert_data = {'observations': np.stack(observations, axis=0),
+                       'actions': np.squeeze(np.stack(actions, axis=0)),
+                       'returns':np.array(returns)}
+        return expert_data
+
+
+def bc(expert_data_file, num_rollouts, num_epochs, optimizer, learning_rate, env_name, batch_size, restore, results_dir, max_timesteps=None):
+    tf.reset_default_graph()
+    
+    env = gym.make(env_name)
+    max_steps = max_timesteps or env.spec.timestep_limit
+
+    logger.debug('loading and building expert policy')
+    expert_policy_fn = load_policy.load_policy(expert_data_file)
+
+    logger.debug('gather experience...')
+    data = gather_expert_experience(num_rollouts, env, expert_policy_fn, max_steps)
+    logger.info("Expert's reward mean : %f(%f)"%(np.mean(data['returns']),np.std(data['returns'])))
+
+    # TODO: Split into train and validation sets, run validation and save model
+    # data = Data(data, train_ratio=0.9, val_ratio=0.05)
+
+    num_samples = len(data['observations'])
+
+    with tf.Session() as session:
+        model = create_model(session, data['observations'], data['observations'].shape[1], data['actions'].shape[1], logger, optimizer, learning_rate, restore, results_dir)
+
+        for epoch in tqdm(range(num_epochs)):
+            perm = np.random.permutation(data['observations'].shape[0])
+
+            obs_samples = data['observations'][perm]
+            action_samples = data['actions'][perm]
+
+            loss = 0.
+            for k in range(0,obs_samples.shape[0], batch_size):
+                loss += model.update(session, obs_samples[k:k+batch_size],
+                                     action_samples[k:k+batch_size])
+        
+            new_exp = model.test_run(session, env, max_steps )
+            tqdm.write("Epoch %3d Loss %f Reward %f" %(epoch, loss/num_samples, new_exp['reward']))
+
+        env = wrappers.Monitor(env, results_dir, force=True)
+
+        results = []
+        for _ in tqdm(range(10)):
+            results.append(model.test_run(session, env, max_steps )['reward'])
+        logger.info("Reward mean & std of Cloned policy: %f(%f)"%(np.mean(results), np.std(results)))
+    return np.mean(data['returns']), np.std(data['returns']), np.mean(results), np.std(results)
+
+def dagger(expert_data_file, env_name, optimizer, learning_rate, restore, results_dir,
+        num_rollouts=10, max_timesteps=None, num_epochs=100, batch_size=32, save=None):
+    tf.reset_default_graph()
+
+    env = gym.make(env_name)
+    max_steps = max_timesteps or env.spec.timestep_limit
+
+    logger.debug('loading and building expert policy')
+    expert_policy_fn = load_policy.load_policy(expert_data_file)
+    logger.debug('gather experience...')
+    data = gather_expert_experience(num_rollouts, env, expert_policy_fn, max_steps)
+    logger.info("Expert's reward mean : %f(%f)"%(np.mean(data['returns']), np.std(data['returns'])))
+    logger.debug('building cloning policy')
+
+    with tf.Session() as session:
+        model = create_model(session, data['observations'], data['observations'].shape[1], data['actions'].shape[1], logger, optimizer, learning_rate, restore, results_dir)
+
+        for epoch in tqdm(range(num_epochs)):
+            num_samples = data['observations'].shape[0]
+            perm = np.random.permutation(num_samples)
+
+            obsv_samples = data['observations'][perm]
+            action_samples = data['actions'][perm]
+
+            loss = 0.
+            for k in range(0,obsv_samples.shape[0], batch_size):
+                loss += model.update(session, obsv_samples[k:k+batch_size],
+                                     action_samples[k:k+batch_size])
+
+            new_exp = model.test_run(session, env, max_steps)
+
+            #Data Aggregation Steps. Supervision signal comes from expert policy.
+            new_exp_len = new_exp['observations'].shape[0]
+            expert_expected_actions = []
+            for k in range(0, new_exp_len, batch_size) :
+                expert_expected_actions.append(expert_policy_fn(new_exp['observations'][k:k+batch_size]))
+
+            # add new experience into original one. (No eviction)
+            data['observations'] = np.concatenate((data['observations'], new_exp['observations']),
+                                                  axis=0)
+            data['actions'] = np.concatenate([data['actions']] + expert_expected_actions,
+                                             axis=0)
+            tqdm.write("Epoch %3d Loss %f Reward %f" %(epoch, loss/num_samples, new_exp['reward']))
+
+        env = wrappers.Monitor(env, results_dir, force=True)
+
+        results = []
+        for _ in tqdm(range(num_rollouts)):
+            results.append(model.test_run(session, env, max_steps )['reward'])
+        logger.info("Reward mean & std of Cloned policy with DAGGER: %f(%f)"%(np.mean(results), np.std(results)))
+    return np.mean(data['returns']), np.std(data['returns']), np.mean(results), np.std(results)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--expert_data", type=str, default="data/Hopper-v1_data_1000_rollouts_500_timesteps.pkl")
-    parser.add_argument('--env_name', type=str, default="Hopper-v1")
-    parser.add_argument('--num_rollouts', type=int, default=100)
-    parser.add_argument("--log_dir", type=str, default="logs/")
-    parser.add_argument("--ckpt_dir", type=str, default="results/")
+    parser.add_argument('--num_rollouts', type=int, default=2)
     parser.add_argument("--num_epochs", type=int, default=100)
-    parser.add_argument("--batch_size", type=int, default=64)
+    parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--optimizer", type=str, default="adam")
-    parser.add_argument("--learning_rate", type=float, default=1e-4)
+    parser.add_argument("--learning_rate", type=float, default=.001)
     parser.add_argument("--restore", type=bool, default=False)
-    parser.add_argument("--train", type=bool, default=False)
-    parser.add_argument("--val", type=bool, default=True)
-    parser.add_argument("--overfit", type=bool, default=False)
-    parser.add_argument("--test", type=bool, default=True)
     args = parser.parse_args()
-    
-    fullcheckpoint_dir = args.ckpt_dir + "bc/{}/".format(args.env_name)
 
-    if args.train:
-        train(args.expert_data, args.log_dir, args.num_epochs, args.optimizer, args.learning_rate, args.env_name, args.batch_size, args.restore, args.val, fullcheckpoint_dir)
-    elif args.test:
-        test(args.expert_data, args.log_dir, args.optimizer, args.learning_rate, args.env_name, args.num_rollouts, fullcheckpoint_dir)
+    log_file = os.path.join(os.getcwd(), 'results', 'train_out.log')
+    logger = config_logging(log_file)
 
+    env_models = [('Ant-v1','experts/Ant-v1.pkl'),
+                  ('HalfCheetah-v1','experts/HalfCheetah-v1.pkl'),
+                  ('Hopper-v1','experts/Hopper-v1.pkl'),
+                  ('Humanoid-v1','experts/Humanoid-v1.pkl'),
+                  ('Reacher-v1','experts/Reacher-v1.pkl'),
+                  ('Walker2d-v1','experts/Walker2d-v1.pkl'),]
+
+    results = []
+    for env_name, expert_data in env_models :
+        bc_results_dir = os.path.join(os.getcwd(), 'results', env_name, 'bc')
+        if not os.path.exists(bc_results_dir):
+            os.makedirs(bc_results_dir)
+        ex_mean, ex_std, bc_mean,bc_std = bc(expert_data, args.num_rollouts,
+            args.num_epochs, args.optimizer, args.learning_rate, env_name, args.batch_size, args.restore, bc_results_dir)
+
+        da_results_dir = os.path.join(os.getcwd(), 'results', env_name, 'da')
+        if not os.path.exists(da_results_dir):
+            os.makedirs(da_results_dir)
+        _,_, da_mean,da_std = dagger(expert_data, env_name, args.optimizer, args.learning_rate, args.restore, da_results_dir,
+                                num_epochs=40,
+                                batch_size=args.batch_size)
+        results.append((env_name, ex_mean, ex_std, bc_mean, bc_std, da_mean, da_std))
+
+    for env_name, ex_mean, ex_std, bc_mean, bc_std, da_mean, da_std in results :
+        logger.info('Env: %s, Expert: %f(%f), Behavior Cloning: %f(%f), Dagger: %f(%f)'%
+              (env_name, ex_mean, ex_std, bc_mean, bc_std, da_mean, da_std))
         
