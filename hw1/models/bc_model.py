@@ -16,17 +16,20 @@ class Model:
         
         self.obs = tf.placeholder(tf.float32, [None, num_observations])
         self.actions = tf.placeholder(tf.float32, [None, num_actions])
+        self.keep_prob = tf.placeholder(tf.float32, name='keep_prob')
+
         self.init_global_step()
         self.pred, self.parameters = self.build_model()
 
         self.loss = self.get_loss()
+        self.training_scalar = tf.summary.scalar("training_loss", self.loss)
+        self.validation_scalar = tf.summary.scalar("validation_loss", self.loss)
         self.optimizer = self.get_optimizer(optimizer, learning_rate)
 
         self.checkpoint_dir = checkpoint_dir
         self.saver = tf.train.Saver(var_list=tf.global_variables())
 
     def save(self, sess):
-        self.logger.info("Saving model...")
         if not os.path.exists(self.checkpoint_dir):
             os.makedirs(self.checkpoint_dir)
         self.saver.save(sess, self.checkpoint_dir + 'model', global_step=self.global_step_tensor)
@@ -82,7 +85,9 @@ class Model:
         normalized = (self.obs - self.obs_mean) / self.obs_std
 
         net = slim.fully_connected(normalized, 50, scope='fc1', activation_fn=tf.nn.relu)
+        net = slim.dropout(net, self.keep_prob)
         net = slim.fully_connected(net, 50, scope='fc2', activation_fn=tf.nn.relu)
+        net = slim.dropout(net, self.keep_prob)
         policy = slim.fully_connected(net, self.num_actions, activation_fn=None, scope='policy')
 
 
@@ -101,6 +106,9 @@ class Model:
         elif optimizer == "adagrad":
             return tf.train.AdagradOptimizer(learning_rate).minimize(self.loss,
                 global_step=self.global_step_tensor)
+        elif optimizer == "rmsprop":
+            return tf.train.RMSPropOptimizer(learning_rate).minimize(self.loss,
+                global_step=self.global_step_tensor)
         else:
             return tf.train.GradientDescentOptimizer(learning_rate).minimize(self.loss,
                 global_step=self.global_step_tensor)
@@ -110,15 +118,23 @@ class Model:
         # loss = tf.reduce_mean(tf.pow(self.pred - self.actions, 2)) / 2
         return loss
 
+    def validate(self, sess, batch_x, batch_y):
+        return sess.run([self.loss, self.validation_scalar],
+                        feed_dict={self.obs:batch_x,
+                                    self.actions: batch_y,
+                                    self.keep_prob: 1})
+
     def predict(self, sess, batch_x):
         return sess.run(self.pred,
-                        feed_dict={self.obs:batch_x})
+                        feed_dict={self.obs:batch_x,
+                                    self.keep_prob: 1})
 
-    def update(self, sess, batch_x, batch_y):
-        loss, _ = sess.run([self.loss, self.optimizer],
-                          feed_dict={self.obs: batch_x,
-                                     self.actions: batch_y})
-        return loss
+    def update(self, sess, batch_x, batch_y, keep_prob):
+        loss, training_scalar, _ = sess.run([self.loss, self.training_scalar, self.optimizer],
+                        feed_dict={self.obs: batch_x,
+                                    self.actions: batch_y,
+                                    self.keep_prob: keep_prob})
+        return loss, training_scalar
 
     def test_run(self, sess, env, max_steps):
         obvs = []
