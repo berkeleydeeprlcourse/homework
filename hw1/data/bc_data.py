@@ -6,11 +6,20 @@ from sklearn.utils import shuffle
 
 
 class Data(object):
-    def __init__(self, data, train_ratio, val_ratio):
+    def __init__(self, data_file, train_ratio, val_ratio):
+        data = pickle.load(open(data_file, "rb"))
+
+        self.expert_mean_return=data['mean_return']
+        self.expert_std_return=data['std_return']
+
         self.train_ratio = train_ratio
         self.val_ratio = val_ratio
 
-        obs, actions = shuffle(data['observations'], data['actions'], random_state=0)
+        obs = np.stack(data['observations'], axis=0)
+        actions = np.squeeze(np.stack(data['actions'], axis=0))
+        assert len(obs) == len(actions), "obs and action mismatch!"
+
+        obs, actions = shuffle(obs, actions, random_state=0)
 
         self.num_observations = obs.shape[1]
         self.num_actions = actions.shape[1]
@@ -31,10 +40,7 @@ class Data(object):
         self.pre_proc(self.test, obs_mean, obs_std)
 
     def split(self, obs, actions):
-        """Split the dataset into train, val, and test"""
-        actions = np.squeeze(actions)
-        assert len(obs) == len(actions), "obs and action mismatch!"
-
+        """Split the dataset into train, val, and test"""     
         n_total = len(obs)
         n_train, n_val = int(n_total * self.train_ratio), int(n_total * self.val_ratio)
 
