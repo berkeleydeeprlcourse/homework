@@ -36,7 +36,7 @@ def create_model(session, obs_samples, num_observations, num_actions, logger, op
     if restore:
         model.load(session)
     else:
-        logger.info("Created model with fresh parameters.")
+        logger.info("Created model with fresh parameters")
         session.run(tf.global_variables_initializer())
 
     return model
@@ -69,7 +69,7 @@ def gather_expert_experience(num_rollouts, env, policy_fn, max_steps):
 
 
 def bc(expert_data_file, expert_policy_file, env_name, restore, results_dir,
-            num_rollouts, max_timesteps=None, optimizer='adam', num_epochs=100, learning_rate=.001, batch_size=32):
+            num_rollouts, max_timesteps=None, optimizer='adam', num_epochs=100, learning_rate=.001, batch_size=32, keep_prob=1):
     tf.reset_default_graph()
     
     env = gym.make(env_name)
@@ -83,10 +83,6 @@ def bc(expert_data_file, expert_policy_file, env_name, restore, results_dir,
     obs = np.stack(data['observations'], axis=0)
     actions = np.squeeze(np.stack(data['actions'], axis=0))
 
-    logger.info(obs.shape)
-    logger.info(actions.shape)
-
-
     x_train, x_test, y_train, y_test = train_test_split(obs, actions, test_size=0.2)
 
     num_samples = len(x_train)
@@ -96,6 +92,8 @@ def bc(expert_data_file, expert_policy_file, env_name, restore, results_dir,
     with tf.Session() as session:
         model = create_model(session, x_train, x_train.shape[1], y_train.shape[1], logger, optimizer, learning_rate, restore, results_dir)
 
+        file_writer = tf.summary.FileWriter(results_dir, session.graph)
+
         for epoch in tqdm(range(num_epochs)):
             perm = np.random.permutation(x_train.shape[0])
 
@@ -104,10 +102,15 @@ def bc(expert_data_file, expert_policy_file, env_name, restore, results_dir,
 
             loss = 0.
             for k in range(0,obs_samples.shape[0], batch_size):
-                loss += model.update(session, obs_samples[k:k+batch_size],
-                                     action_samples[k:k+batch_size])
-        
-            # min_val_loss = validate(model, logger, session, x_test, num_epochs, batch_size, min_val_loss, results_dir)
+                batch_loss, training_scalar = model.update(session, obs_samples[k:k+batch_size],
+                                     action_samples[k:k+batch_size],
+                                     keep_prob)
+                loss += batch_loss
+
+            file_writer.add_summary(training_scalar, epoch)
+
+            min_val_loss, validation_scalar = validate(model, logger, session, x_test, y_test, epoch, batch_size, min_val_loss, results_dir)
+            file_writer.add_summary(validation_scalar, epoch)
 
             new_exp = model.test_run(session, env, max_steps )
             tqdm.write("Epoch %3d Loss %f Reward %f" %(epoch, loss/num_samples, new_exp['reward']))
@@ -117,25 +120,26 @@ def bc(expert_data_file, expert_policy_file, env_name, restore, results_dir,
         results = []
         for _ in tqdm(range(10)):
             results.append(model.test_run(session, env, max_steps )['reward'])
-        logger.info("Reward mean & std of Cloned policy: %f(%f)"%(np.mean(results), np.std(results)))
+        logger.info("Reward mean and std dev with behavior cloning: %f(%f)"%(np.mean(results), np.std(results)))
     return data['mean_return'], data['std_return'], np.mean(results), np.std(results)
 
-def validate(model, logger, session, x_test, num_epoch, batch_size, min_loss, checkpoint_dir):
-    batches = data.batch_iter(x_test, batch_size, 1)
+def validate(model, logger, session, x_test, y_test, num_epoch, batch_size, min_loss, checkpoint_dir):
     avg_loss = []
-    for i, (batch_x, batch_y) in enumerate(batches):
-        pred, loss = model.step(session, batch_x, batch_y, is_train=False)
-        avg_loss.append(loss)
+
+    # for k in range(0, x_test.shape[0], batch_size):
+    loss, validation_scalar = model.validate(session, x_test, y_test)
+    avg_loss.append(loss)
+
     new_loss = sum(avg_loss) / len(avg_loss)
     logger.info("Finished epoch %d, average validation loss = %f" % (num_epoch, new_loss))
+
     if new_loss < min_loss:  # Only save model if val loss dropped
         model.save(session)
-        logger.info("Model saved!")
         min_loss = new_loss
-    return min_loss
+    return min_loss, validation_scalar
 
 def dagger(expert_data_file, expert_policy_file, env_name, restore, results_dir,
-            num_rollouts, max_timesteps=None, optimizer='adam', num_epochs=40, learning_rate=.001, batch_size=32):
+            num_rollouts, max_timesteps=None, optimizer='adam', num_epochs=40, learning_rate=.001, batch_size=32, keep_prob=1):
     tf.reset_default_graph()
 
     env = gym.make(env_name)
@@ -151,13 +155,14 @@ def dagger(expert_data_file, expert_policy_file, env_name, restore, results_dir,
     obs = np.stack(data['observations'], axis=0)
     actions = np.squeeze(np.stack(data['actions'], axis=0))
 
-    logger.info(obs.shape)
-    logger.info(actions.shape)
-
     x_train, x_test, y_train, y_test = train_test_split(obs, actions, test_size=0.2)
+
+    min_val_loss = sys.maxsize
 
     with tf.Session() as session:
         model = create_model(session, x_train, x_train.shape[1], y_train.shape[1], logger, optimizer, learning_rate, restore, results_dir)
+
+        file_writer = tf.summary.FileWriter(results_dir, session.graph)
 
         for epoch in tqdm(range(num_epochs)):
             num_samples = x_train.shape[0]
@@ -172,8 +177,15 @@ def dagger(expert_data_file, expert_policy_file, env_name, restore, results_dir,
 
             loss = 0.
             for k in range(0,obsv_samples.shape[0], batch_size):
-                loss += model.update(session, obsv_samples[k:k+batch_size],
-                                     action_samples[k:k+batch_size])
+                batch_loss, training_scalar = model.update(session, obsv_samples[k:k+batch_size],
+                                     action_samples[k:k+batch_size],
+                                     keep_prob)
+                loss += batch_loss
+            
+            file_writer.add_summary(training_scalar, epoch)                        
+
+            min_val_loss, validation_scalar = validate(model, logger, session, x_test, y_test, epoch, batch_size, min_val_loss, results_dir)
+            file_writer.add_summary(validation_scalar, epoch)
 
             new_exp = model.test_run(session, env, max_steps)
 
@@ -195,7 +207,7 @@ def dagger(expert_data_file, expert_policy_file, env_name, restore, results_dir,
         results = []
         for _ in tqdm(range(10)):
             results.append(model.test_run(session, env, max_steps )['reward'])
-        logger.info("Reward mean & std of Cloned policy with DAGGER: %f(%f)"%(np.mean(results), np.std(results)))
+        logger.info("Reward mean and std dev with DAgger: %f(%f)"%(np.mean(results), np.std(results)))
     return data['mean_return'], data['std_return'], np.mean(results), np.std(results)
 
 
