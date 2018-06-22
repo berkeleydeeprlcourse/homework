@@ -43,7 +43,7 @@ def gather_expert_experience(num_rollouts, env, policy_fn, max_steps):
         returns = []
         observations = []
         actions = []
-        for i in tqdm(range(num_rollouts)):
+        for _ in tqdm(range(num_rollouts)):
             obs = env.reset()
             done = False
             totalr = 0.
@@ -65,7 +65,8 @@ def gather_expert_experience(num_rollouts, env, policy_fn, max_steps):
         return expert_data
 
 
-def bc(expert_data_file, num_rollouts, num_epochs, optimizer, learning_rate, env_name, batch_size, restore, results_dir, max_timesteps=None):
+def bc(expert_data_file, env_name, restore, results_dir,
+            num_rollouts, max_timesteps=None, optimizer='adam', num_epochs=100, learning_rate=.001, batch_size=32):
     tf.reset_default_graph()
     
     env = gym.make(env_name)
@@ -108,8 +109,8 @@ def bc(expert_data_file, num_rollouts, num_epochs, optimizer, learning_rate, env
         logger.info("Reward mean & std of Cloned policy: %f(%f)"%(np.mean(results), np.std(results)))
     return np.mean(data['returns']), np.std(data['returns']), np.mean(results), np.std(results)
 
-def dagger(expert_data_file, env_name, optimizer, learning_rate, restore, results_dir,
-        num_rollouts=10, max_timesteps=None, num_epochs=100, batch_size=32, save=None):
+def dagger(expert_data_file, env_name, restore, results_dir,
+            num_rollouts, max_timesteps=None, optimizer='adam', num_epochs=40, learning_rate=.001, batch_size=32):
     tf.reset_default_graph()
 
     env = gym.make(env_name)
@@ -155,7 +156,7 @@ def dagger(expert_data_file, env_name, optimizer, learning_rate, restore, result
         env = wrappers.Monitor(env, results_dir, force=True)
 
         results = []
-        for _ in tqdm(range(num_rollouts)):
+        for _ in tqdm(range(10)):
             results.append(model.test_run(session, env, max_steps )['reward'])
         logger.info("Reward mean & std of Cloned policy with DAGGER: %f(%f)"%(np.mean(results), np.std(results)))
     return np.mean(data['returns']), np.std(data['returns']), np.mean(results), np.std(results)
@@ -163,38 +164,31 @@ def dagger(expert_data_file, env_name, optimizer, learning_rate, restore, result
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--num_rollouts', type=int, default=2)
-    parser.add_argument("--num_epochs", type=int, default=100)
-    parser.add_argument("--batch_size", type=int, default=32)
-    parser.add_argument("--optimizer", type=str, default="adam")
-    parser.add_argument("--learning_rate", type=float, default=.001)
     parser.add_argument("--restore", type=bool, default=False)
     args = parser.parse_args()
 
     log_file = os.path.join(os.getcwd(), 'results', 'train_out.log')
     logger = config_logging(log_file)
 
-    env_models = [('Ant-v1','experts/Ant-v1.pkl'),
-                  ('HalfCheetah-v1','experts/HalfCheetah-v1.pkl'),
-                  ('Hopper-v1','experts/Hopper-v1.pkl'),
-                  ('Humanoid-v1','experts/Humanoid-v1.pkl'),
-                  ('Reacher-v1','experts/Reacher-v1.pkl'),
-                  ('Walker2d-v1','experts/Walker2d-v1.pkl'),]
+    env_models = [('Ant-v1','experts/Ant-v1.pkl', 250),
+                  ('HalfCheetah-v1','experts/HalfCheetah-v1.pkl', 10),
+                  ('Hopper-v1','experts/Hopper-v1.pkl', 10),
+                  ('Humanoid-v1','experts/Humanoid-v1.pkl', 250),
+                  ('Reacher-v1','experts/Reacher-v1.pkl', 250),
+                  ('Walker2d-v1','experts/Walker2d-v1.pkl', 10)
+                  ]
 
     results = []
-    for env_name, expert_data in env_models :
+    for env_name, expert_data, num_rollouts in env_models :
         bc_results_dir = os.path.join(os.getcwd(), 'results', env_name, 'bc')
         if not os.path.exists(bc_results_dir):
             os.makedirs(bc_results_dir)
-        ex_mean, ex_std, bc_mean,bc_std = bc(expert_data, args.num_rollouts,
-            args.num_epochs, args.optimizer, args.learning_rate, env_name, args.batch_size, args.restore, bc_results_dir)
+        ex_mean, ex_std, bc_mean,bc_std = bc(expert_data, env_name, args.restore, bc_results_dir, num_rollouts)
 
         da_results_dir = os.path.join(os.getcwd(), 'results', env_name, 'da')
         if not os.path.exists(da_results_dir):
             os.makedirs(da_results_dir)
-        _,_, da_mean,da_std = dagger(expert_data, env_name, args.optimizer, args.learning_rate, args.restore, da_results_dir,
-                                num_epochs=40,
-                                batch_size=args.batch_size)
+        _,_, da_mean,da_std = dagger(expert_data, env_name, args.restore, da_results_dir, num_rollouts)
         results.append((env_name, ex_mean, ex_std, bc_mean, bc_std, da_mean, da_std))
 
     for env_name, ex_mean, ex_std, bc_mean, bc_std, da_mean, da_std in results :
