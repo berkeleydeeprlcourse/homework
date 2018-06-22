@@ -1,5 +1,6 @@
 from __future__ import print_function
 import os
+import sys
 import logging
 import argparse
 from tqdm import tqdm
@@ -8,6 +9,8 @@ import numpy as np
 import gym
 from gym import wrappers
 import load_policy
+import pickle
+from sklearn.model_selection import train_test_split
 
 from data.bc_data import Data
 from models.bc_model import Model
@@ -65,39 +68,47 @@ def gather_expert_experience(num_rollouts, env, policy_fn, max_steps):
         return expert_data
 
 
-def bc(expert_data_file, env_name, restore, results_dir,
+def bc(expert_data_file, expert_policy_file, env_name, restore, results_dir,
             num_rollouts, max_timesteps=None, optimizer='adam', num_epochs=100, learning_rate=.001, batch_size=32):
     tf.reset_default_graph()
     
     env = gym.make(env_name)
     max_steps = max_timesteps or env.spec.timestep_limit
 
-    logger.debug('loading and building expert policy')
-    expert_policy_fn = load_policy.load_policy(expert_data_file)
+    # data = Data(expert_data_file, train_ratio=0.9, val_ratio=0.05)
 
-    logger.debug('gather experience...')
-    data = gather_expert_experience(num_rollouts, env, expert_policy_fn, max_steps)
-    logger.info("Expert's reward mean : %f(%f)"%(np.mean(data['returns']),np.std(data['returns'])))
+    with open(expert_data_file, 'rb') as f:
+        data = pickle.loads(f.read())
 
-    # TODO: Split into train and validation sets, run validation and save model
-    # data = Data(data, train_ratio=0.9, val_ratio=0.05)
+    obs = np.stack(data['observations'], axis=0)
+    actions = np.squeeze(np.stack(data['actions'], axis=0))
 
-    num_samples = len(data['observations'])
+    logger.info(obs.shape)
+    logger.info(actions.shape)
+
+
+    x_train, x_test, y_train, y_test = train_test_split(obs, actions, test_size=0.2)
+
+    num_samples = len(x_train)
+
+    min_val_loss = sys.maxsize
 
     with tf.Session() as session:
-        model = create_model(session, data['observations'], data['observations'].shape[1], data['actions'].shape[1], logger, optimizer, learning_rate, restore, results_dir)
+        model = create_model(session, x_train, x_train.shape[1], y_train.shape[1], logger, optimizer, learning_rate, restore, results_dir)
 
         for epoch in tqdm(range(num_epochs)):
-            perm = np.random.permutation(data['observations'].shape[0])
+            perm = np.random.permutation(x_train.shape[0])
 
-            obs_samples = data['observations'][perm]
-            action_samples = data['actions'][perm]
+            obs_samples = x_train[perm]
+            action_samples = y_train[perm]
 
             loss = 0.
             for k in range(0,obs_samples.shape[0], batch_size):
                 loss += model.update(session, obs_samples[k:k+batch_size],
                                      action_samples[k:k+batch_size])
         
+            # min_val_loss = validate(model, logger, session, x_test, num_epochs, batch_size, min_val_loss, results_dir)
+
             new_exp = model.test_run(session, env, max_steps )
             tqdm.write("Epoch %3d Loss %f Reward %f" %(epoch, loss/num_samples, new_exp['reward']))
 
@@ -107,31 +118,57 @@ def bc(expert_data_file, env_name, restore, results_dir,
         for _ in tqdm(range(10)):
             results.append(model.test_run(session, env, max_steps )['reward'])
         logger.info("Reward mean & std of Cloned policy: %f(%f)"%(np.mean(results), np.std(results)))
-    return np.mean(data['returns']), np.std(data['returns']), np.mean(results), np.std(results)
+    return data['mean_return'], data['std_return'], np.mean(results), np.std(results)
 
-def dagger(expert_data_file, env_name, restore, results_dir,
+def validate(model, logger, session, x_test, num_epoch, batch_size, min_loss, checkpoint_dir):
+    batches = data.batch_iter(x_test, batch_size, 1)
+    avg_loss = []
+    for i, (batch_x, batch_y) in enumerate(batches):
+        pred, loss = model.step(session, batch_x, batch_y, is_train=False)
+        avg_loss.append(loss)
+    new_loss = sum(avg_loss) / len(avg_loss)
+    logger.info("Finished epoch %d, average validation loss = %f" % (num_epoch, new_loss))
+    if new_loss < min_loss:  # Only save model if val loss dropped
+        model.save(session)
+        logger.info("Model saved!")
+        min_loss = new_loss
+    return min_loss
+
+def dagger(expert_data_file, expert_policy_file, env_name, restore, results_dir,
             num_rollouts, max_timesteps=None, optimizer='adam', num_epochs=40, learning_rate=.001, batch_size=32):
     tf.reset_default_graph()
 
     env = gym.make(env_name)
     max_steps = max_timesteps or env.spec.timestep_limit
 
-    logger.debug('loading and building expert policy')
-    expert_policy_fn = load_policy.load_policy(expert_data_file)
-    logger.debug('gather experience...')
-    data = gather_expert_experience(num_rollouts, env, expert_policy_fn, max_steps)
-    logger.info("Expert's reward mean : %f(%f)"%(np.mean(data['returns']), np.std(data['returns'])))
-    logger.debug('building cloning policy')
+    expert_policy_fn = load_policy.load_policy(expert_policy_file)
+
+    # data = Data(expert_data_file, train_ratio=0.9, val_ratio=0.05)
+
+    with open(expert_data_file, 'rb') as f:
+        data = pickle.loads(f.read())
+
+    obs = np.stack(data['observations'], axis=0)
+    actions = np.squeeze(np.stack(data['actions'], axis=0))
+
+    logger.info(obs.shape)
+    logger.info(actions.shape)
+
+    x_train, x_test, y_train, y_test = train_test_split(obs, actions, test_size=0.2)
 
     with tf.Session() as session:
-        model = create_model(session, data['observations'], data['observations'].shape[1], data['actions'].shape[1], logger, optimizer, learning_rate, restore, results_dir)
+        model = create_model(session, x_train, x_train.shape[1], y_train.shape[1], logger, optimizer, learning_rate, restore, results_dir)
 
         for epoch in tqdm(range(num_epochs)):
-            num_samples = data['observations'].shape[0]
+            num_samples = x_train.shape[0]
             perm = np.random.permutation(num_samples)
 
-            obsv_samples = data['observations'][perm]
-            action_samples = data['actions'][perm]
+            obsv_samples = x_train[perm]
+            action_samples = y_train[perm]
+
+            obsv_samples = np.stack(obsv_samples, axis=0)
+            action_samples = np.squeeze(np.stack(action_samples, axis=0))
+
 
             loss = 0.
             for k in range(0,obsv_samples.shape[0], batch_size):
@@ -147,9 +184,9 @@ def dagger(expert_data_file, env_name, restore, results_dir,
                 expert_expected_actions.append(expert_policy_fn(new_exp['observations'][k:k+batch_size]))
 
             # add new experience into original one. (No eviction)
-            data['observations'] = np.concatenate((data['observations'], new_exp['observations']),
+            x_train = np.concatenate((x_train, new_exp['observations']),
                                                   axis=0)
-            data['actions'] = np.concatenate([data['actions']] + expert_expected_actions,
+            y_train = np.concatenate([y_train] + expert_expected_actions,
                                              axis=0)
             tqdm.write("Epoch %3d Loss %f Reward %f" %(epoch, loss/num_samples, new_exp['reward']))
 
@@ -159,7 +196,7 @@ def dagger(expert_data_file, env_name, restore, results_dir,
         for _ in tqdm(range(10)):
             results.append(model.test_run(session, env, max_steps )['reward'])
         logger.info("Reward mean & std of Cloned policy with DAGGER: %f(%f)"%(np.mean(results), np.std(results)))
-    return np.mean(data['returns']), np.std(data['returns']), np.mean(results), np.std(results)
+    return data['mean_return'], data['std_return'], np.mean(results), np.std(results)
 
 
 if __name__ == "__main__":
@@ -170,25 +207,25 @@ if __name__ == "__main__":
     log_file = os.path.join(os.getcwd(), 'results', 'train_out.log')
     logger = config_logging(log_file)
 
-    env_models = [('Ant-v1','experts/Ant-v1.pkl', 250),
-                  ('HalfCheetah-v1','experts/HalfCheetah-v1.pkl', 10),
-                  ('Hopper-v1','experts/Hopper-v1.pkl', 10),
-                  ('Humanoid-v1','experts/Humanoid-v1.pkl', 250),
-                  ('Reacher-v1','experts/Reacher-v1.pkl', 250),
-                  ('Walker2d-v1','experts/Walker2d-v1.pkl', 10)
+    env_models = [('Ant-v1', 'data/Ant-v1_data_250_rollouts.pkl', 'experts/Ant-v1.pkl', 250),
+                  ('HalfCheetah-v1', 'data/HalfCheetah-v1_data_10_rollouts.pkl', 'experts/HalfCheetah-v1.pkl', 10),
+                  ('Hopper-v1', 'data/Hopper-v1_data_10_rollouts.pkl', 'experts/Hopper-v1.pkl',  10),
+                  ('Humanoid-v1', 'data/Humanoid-v1_data_250_rollouts.pkl', 'experts/Humanoid-v1.pkl', 250),
+                  ('Reacher-v1', 'data/Reacher-v1_data_250_rollouts.pkl', 'experts/Reacher-v1.pkl', 250),
+                  ('Walker2d-v1', 'data/Walker2d-v1_data_10_rollouts.pkl','experts/Walker2d-v1.pkl', 10)
                   ]
 
     results = []
-    for env_name, expert_data, num_rollouts in env_models :
+    for env_name, rollout_data, expert_policy_file, num_rollouts in env_models :
         bc_results_dir = os.path.join(os.getcwd(), 'results', env_name, 'bc')
         if not os.path.exists(bc_results_dir):
             os.makedirs(bc_results_dir)
-        ex_mean, ex_std, bc_mean,bc_std = bc(expert_data, env_name, args.restore, bc_results_dir, num_rollouts)
+        ex_mean, ex_std, bc_mean,bc_std = bc(rollout_data, expert_policy_file, env_name, args.restore, bc_results_dir, num_rollouts)
 
         da_results_dir = os.path.join(os.getcwd(), 'results', env_name, 'da')
         if not os.path.exists(da_results_dir):
             os.makedirs(da_results_dir)
-        _,_, da_mean,da_std = dagger(expert_data, env_name, args.restore, da_results_dir, num_rollouts)
+        _,_, da_mean,da_std = dagger(rollout_data, expert_policy_file, env_name, args.restore, da_results_dir, num_rollouts)
         results.append((env_name, ex_mean, ex_std, bc_mean, bc_std, da_mean, da_std))
 
     for env_name, ex_mean, ex_std, bc_mean, bc_std, da_mean, da_std in results :
