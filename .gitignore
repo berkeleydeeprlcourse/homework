@@ -92,3 +92,5 @@ ENV/
 # HW1 files
 hw1/archive/
 hw1/results/
+.vscode/settings.json
+hw1/images/*.xcf
