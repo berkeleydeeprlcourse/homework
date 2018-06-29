@@ -226,7 +226,6 @@ def train_PG(exp_name='',
                                 size=size))
         # Define placeholders for targets, a loss function and an update op for fitting a 
         # neural network baseline. These will be used to fit the neural network baseline. 
-        # YOUR_CODE_HERE
         baseline_targets = tf.placeholder(shape=[None], name="baseline_targets", dtype=tf.float32)
         baseline_loss = tf.nn.l2_loss(baseline_prediction - baseline_targets)
         baseline_update_op = tf.train.AdamOptimizer(learning_rate).minimize(baseline_loss)
