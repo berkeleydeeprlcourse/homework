@@ -363,8 +363,8 @@ def train_PG(exp_name='',
             # Hint #bl1: rescale the output from the nn_baseline to match the statistics
             # (mean and std) of the current or previous batch of Q-values. (Goes with Hint
             # #bl2 below.)
-
-            b_n = TODO
+            b_n = sess.run(baseline_prediction, feed_dict={sy_ob_no: ob_no})
+            b_n = b_n * np.std(q_n, axis=0) + np.mean(q_n, axis=0)
             adv_n = q_n - b_n
         else:
             adv_n = q_n.copy()
@@ -391,9 +391,10 @@ def train_PG(exp_name='',
             #
             # Hint #bl2: Instead of trying to target raw Q-values directly, rescale the 
             # targets to have mean zero and std=1. (Goes with Hint #bl1 above.)
-
-            # YOUR_CODE_HERE
-            pass
+            q_n_mean = np.mean(q_n, axis=0)
+            q_n_std = np.std(q_n, axis=0)
+            q_n = (q_n - q_n_mean) / (q_n_std + 1e-7)
+            sess.run(baseline_update_op, feed_dict={sy_ob_no: ob_no, baseline_targets: q_n})
 
         #====================================================================================#
         #                           ----------SECTION 4----------
