@@ -1,4 +1,4 @@
-## Test train_py.py
+## Testing
 ```
 python train_pg_test.py
 ```
@@ -34,10 +34,7 @@ python train_pg.py CartPole-v0 -n 100 -b 5000 -e 5 -rtg -dna --exp_name lb_rtg_d
 
 python train_pg.py CartPole-v0 -n 100 -b 5000 -e 5 -rtg --exp_name lb_rtg_na
 ```
-## Plot a Sample Run
-```
-python plot.py data/lb_no_rtg_dna_CartPole-v0_26-06-2018_07-51-18 --value AverageReturn
-```
+
 ## Plot Small Batch (1000) Average Returns
 ```
 python plot.py data/sb_no_rtg_dna_CartPole-v0_26-06-2018_06-25-21 data/sb_rtg_dna_CartPole-v0_26-06-2018_06-40-11 data/sb_rtg_na_CartPole-v0_26-06-2018_07-39-12
@@ -59,7 +56,13 @@ python plot.py data/lb_no_rtg_dna_CartPole-v0_26-06-2018_07-51-18 data/lb_rtg_dn
 ```
 ![Large Batch Returns](charts/avg_return_cartpole_lgbatch_5000.png)
 
+## Video of CartPole after 100 iterations
+[MP4](videos/video_cartpole.mp4)
+
+
 # InvertedPendulum-v0
+
+## Sample Runs For InvertedPendulum-v0
 ```
 python train_pg.py InvertedPendulum-v1 -n 100 -b 1000 -e 5 -rtg -lr 0.02 --exp_name sb_rtg_na_0.02
 
@@ -68,8 +71,11 @@ python train_pg.py InvertedPendulum-v1 -n 100 -b 1000 -e 5 -rtg -dna -lr 0.02 --
 python train_pg.py InvertedPendulum-v1 -n 100 -b 1000 -e 5 -rtg -lr 0.02 -bl --exp_name sb_rtg_na_0.02_bl
 
 ```
-
+## Plot InvertedPendulum Sample Runs
 ```
 python plot.py data/sb_rtg_na_0.02_InvertedPendulum-v1_27-06-2018_10-45-20 data/sb_rtg_dna_0.02_InvertedPendulum-v1_29-06-2018_09-34-48 data/sb_rtg_na_0.02_bl_InvertedPendulum-v1_29-06-2018_09-47-27 
 ```
 ![InvertedPendulum Returns](charts/avg_return_invertedpendulum.png)
+
+## Video of InvertedPendulum after 100 iterations
+[MP4](videos/video_invertedpendulum.mp4)

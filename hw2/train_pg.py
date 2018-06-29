@@ -7,6 +7,7 @@ import os
 import time
 import inspect
 from multiprocessing import Process
+from gym import wrappers
 
 #============================================================================================#
 # Utilities
@@ -100,6 +101,8 @@ def train_PG(exp_name='',
 
     # Make the gym environment
     env = gym.make(env_name)
+
+    env = wrappers.Monitor(env, logdir, force=True)
     
     # Is this env continuous, or discrete?
     discrete = isinstance(env.action_space, gym.spaces.Discrete)
