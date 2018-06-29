@@ -65,6 +65,11 @@ class TrainPGTest(tf.test.TestCase):
             sy_logprob_n_val = session.run(sy_logprob_n)
             self.assertArrayNear(sy_logprob_n_val, [0.4054651], err=1e-4)
 
+            sy_ac_na_1 = [1]
+            sy_logprob_n_1 = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=sy_ac_na_1, logits=sy_logits_na)
+            sy_logprob_n_val_1 = session.run(sy_logprob_n_1)
+            self.assertArrayNear(sy_logprob_n_val_1, [0.4054651], err=1e-4)
+
     def test_continuous_policy_network(self):
         with self.test_session() as session:
             sy_mean = [1., -1]              
