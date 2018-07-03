@@ -7,7 +7,8 @@ import random
 
 def huber_loss(x, delta=1.0):
     # https://en.wikipedia.org/wiki/Huber_loss
-    return tf.select(
+    # tf.select changed to tf.where
+    return tf.where(
         tf.abs(x) < delta,
         tf.square(x) * 0.5,
         delta * (tf.abs(x) - 0.5 * delta)
