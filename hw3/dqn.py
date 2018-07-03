@@ -127,7 +127,25 @@ def learn(env,
     # Older versions of TensorFlow may require using "VARIABLES" instead of "GLOBAL_VARIABLES"
     ######
     
-    # YOUR CODE HERE
+    # Create the Q-function network
+    q_t = q_func(obs_t_float, num_actions, scope="online_q_func", reuse=False)
+    q_func_vars  = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='online_q_func')
+
+    # Create the target network
+    q_tp1 = q_func(obs_tp1_float, num_actions, scope="target_q_func", reuse=False)
+    target_q_func_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='target_q_func')
+
+     # q scores for actions which we know were selected in the given state.
+    q_t_selected = tf.reduce_sum(tf.multiply(q_t, tf.one_hot(act_t_ph, num_actions)), axis = 1)
+
+    # compute best possible value with done mask, gamma, reward
+    q_t_selected_target = tf.reduce_max(q_tp1, axis=1) * (1.0 - done_mask_ph) * gamma + rew_t_ph
+
+    # MSE
+    # total_error = tf.reduce_mean(tf.square(tf.subtract(q_t_selected_target, q_t_selected)) 
+
+    # Huber Loss
+    total_error = tf.reduce_mean(huber_loss(tf.subtract(q_t_selected_target, q_t_selected)))
 
     ######
 
@@ -194,7 +212,25 @@ def learn(env,
 
         #####
         
-        # YOUR CODE HERE
+        buffer_idx = replay_buffer.store_frame(last_obs)
+        observation = replay_buffer.encode_recent_observation()
+
+        observation = np.expand_dims(observation, axis=0)
+
+        # epsilon greedy
+        if not model_initialized or np.random.rand(1) < exploration.value(t):
+            # randomly choose action
+            action = np.random.choice(num_actions)
+        else:
+            # greedily choose action from Q-function network
+            q_val = session.run(q_t, feed_dict={obs_t_ph: observation})
+            action = np.argmax(np.squeeze(q_val))
+
+        last_obs, reward, done, _ = env.step(action)
+        replay_buffer.store_effect(buffer_idx, action, reward, done)
+
+        if done:
+            last_obs = env.reset()
 
         #####
 
@@ -244,8 +280,24 @@ def learn(env,
             # variable num_param_updates useful for this (it was initialized to 0)
             #####
             
-            # YOUR CODE HERE
+            obs_t_batch, act_t_batch, rew_t_batch, obs_tp1_batch, done_mask_batch = replay_buffer.sample(batch_size)
 
+            if not model_initialized:
+                initialize_interdependent_variables(session, tf.global_variables(), {
+                    obs_t_ph: obs_t_batch,
+                    obs_tp1_ph: obs_tp1_batch,
+                })
+                model_initialized = True
+
+            _ = session.run(train_fn, feed_dict={ obs_t_ph: obs_t_batch, act_t_ph: act_t_batch,
+                            rew_t_ph: rew_t_batch, obs_tp1_ph: obs_tp1_batch, done_mask_ph: done_mask_batch,
+                            learning_rate: optimizer_spec.lr_schedule.value(t) })
+
+            num_param_updates += 1
+
+            if (num_param_updates % target_update_freq == 0):
+                session.run(update_target_fn)
+                print("target updated at round: {}".format(num_param_updates))
             #####
 
         ### 4. Log progress
