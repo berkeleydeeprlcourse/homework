@@ -88,10 +88,14 @@ ENV/
 # Rope project settings
 .ropeproject
 
-
 # HW1 files
 hw1/archive/
 hw1/results/
 .vscode/settings.json
 hw1/images/*.xcf
+
+# HW2 files
 hw2/data/
+
+# HW3 files
+hw3/results/

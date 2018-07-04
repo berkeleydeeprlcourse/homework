@@ -11,6 +11,7 @@ from dqn_utils import *
 OptimizerSpec = namedtuple("OptimizerSpec", ["constructor", "kwargs", "lr_schedule"])
 
 def learn(env,
+          results_dir,
           q_func,
           optimizer_spec,
           session,
@@ -76,6 +77,9 @@ def learn(env,
     """
     assert type(env.observation_space) == gym.spaces.Box
     assert type(env.action_space)      == gym.spaces.Discrete
+
+    summary_writer_meanreward = tf.summary.FileWriter(results_dir + '/mean_reward')
+    summary_writer_bestmeanreward = tf.summary.FileWriter(results_dir + '/best_mean_reward')
 
     ###############
     # BUILD MODEL #
@@ -307,6 +311,14 @@ def learn(env,
         if len(episode_rewards) > 100:
             best_mean_episode_reward = max(best_mean_episode_reward, mean_episode_reward)
         if t % LOG_EVERY_N_STEPS == 0 and model_initialized:
+            summary_meanreward = tf.Summary()
+            summary_meanreward.value.add(tag='global/mean_reward', simple_value=mean_episode_reward)
+            summary_writer_meanreward.add_summary(summary_meanreward, global_step=t)
+
+            summary_bestmeanreward = tf.Summary()
+            summary_bestmeanreward.value.add(tag='global/mean_reward', simple_value=best_mean_episode_reward)
+            summary_writer_bestmeanreward.add_summary(summary_bestmeanreward, global_step=t)            
+
             print("Timestep %d" % (t,))
             print("mean reward (100 episodes) %f" % mean_episode_reward)
             print("best mean reward %f" % best_mean_episode_reward)
