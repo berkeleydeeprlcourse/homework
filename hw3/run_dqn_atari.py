@@ -1,3 +1,5 @@
+import os
+import time
 import argparse
 import gym
 from gym import wrappers
@@ -30,6 +32,7 @@ def atari_model(img_in, num_actions, scope, reuse=False):
 
 def atari_learn(env,
                 session,
+                results_dir,
                 num_timesteps):
     # This is just a rough estimate
     num_iterations = float(num_timesteps) / 4.0
@@ -62,6 +65,7 @@ def atari_learn(env,
 
     dqn.learn(
         env,
+        results_dir,
         q_func=atari_model,
         optimizer_spec=optimizer,
         session=session,
@@ -110,11 +114,12 @@ def get_env(task, seed):
     set_global_seeds(seed)
     env.seed(seed)
 
-    expt_dir = '/tmp/hw3_vid_dir2/'
-    env = wrappers.Monitor(env, osp.join(expt_dir, "gym"), force=True)
+    results_dir = os.path.join(os.getcwd(), 'results', time.strftime("%d-%m-%Y_%H-%M-%S"))
+
+    env = wrappers.Monitor(env, results_dir, force=True)
     env = wrap_deepmind(env)
 
-    return env
+    return env, results_dir
 
 def main():
     # Get Atari games.
@@ -125,9 +130,9 @@ def main():
 
     # Run training
     seed = 0 # Use a seed of zero (you may want to randomize the seed!)
-    env = get_env(task, seed)
+    env, results_dir = get_env(task, seed)
     session = get_session()
-    atari_learn(env, session, num_timesteps=task.max_timesteps)
+    atari_learn(env, session, results_dir, num_timesteps=task.max_timesteps)
 
 if __name__ == "__main__":
     main()
