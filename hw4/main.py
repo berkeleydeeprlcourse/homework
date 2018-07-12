@@ -1,15 +1,18 @@
 import numpy as np
 import tensorflow as tf
 import gym
+from gym import wrappers
+import gym.envs.mujoco
 from dynamics import NNDynamicsModel
 from controllers import MPCcontroller, RandomController
 from cost_functions import cheetah_cost_fn, trajectory_cost_fn
 import time
 import logz
+import tqdm
 import os
 import copy
 import matplotlib.pyplot as plt
-from cheetah_env import HalfCheetahEnvNew
+from gym.envs.registration import registry, register, make, spec
 
 def sample(env, 
            controller, 
@@ -23,8 +26,31 @@ def sample(env,
         Each path can have elements for observations, next_observations, rewards, returns, actions, etc.
     """
     paths = []
-    """ YOUR CODE HERE """
-
+    for _ in tqdm.tqdm(range(num_paths)):
+        observations, actions, next_observations, rewards = [], [], [], []
+        observation = env.reset()
+        steps = 0
+        while True:
+            if render:
+                env.render()
+            observations.append(observation)
+            action = controller.get_action(observation)
+            actions.append(action)
+            observation, reward, done, _ = env.step(action)
+            next_observations.append(observation)
+            rewards.append(reward)
+            steps += 1
+            if done:
+                break
+            if steps >= horizon:
+                print('steps exceeeded horizon')
+                break
+                
+        path = {'observations': np.array(observations),
+                'actions': np.array(actions),
+                'next_observations': np.array(next_observations),
+                'rewards': np.array(rewards)}
+        paths.append(path)
     return paths
 
 # Utility to compute cost a path for a given cost function
@@ -37,8 +63,21 @@ def compute_normalization(data):
     Return 6 elements: mean of s_t, std of s_t, mean of (s_t+1 - s_t), std of (s_t+1 - s_t), mean of actions, std of actions
     """
 
-    """ YOUR CODE HERE """
-    return mean_obs, std_obs, mean_deltas, std_deltas, mean_action, std_action
+    # flatten dataset across all paths
+    observations = np.concatenate([item['observations'] for item in data])
+    next_observations = np.concatenate([item['next_observations'] for item in data])
+    actions = np.concatenate([item['actions'] for item in data])
+    
+    mean_obs = np.mean(observations, axis=0)
+    std_obs = np.std(observations, axis=0)
+    
+    mean_deltas = np.mean(next_observations - observations, axis=0)
+    std_deltas = np.std(next_observations - observations, axis=0)
+    
+    mean_actions = np.mean(actions, axis=0)
+    std_actions = np.std(actions, axis=0)
+
+    return mean_obs, std_obs, mean_deltas, std_deltas, mean_actions, std_actions
 
 
 def plot_comparison(env, dyn_model):
@@ -111,8 +150,7 @@ def train(env,
 
     random_controller = RandomController(env)
 
-    """ YOUR CODE HERE """
-
+    data = sample(env, random_controller, num_paths_random, env_horizon, render=render)
 
     #========================================================
     # 
@@ -122,8 +160,7 @@ def train(env,
     # for normalizing inputs and denormalizing outputs
     # from the dynamics network. 
     # 
-    normalization = """ YOUR CODE HERE """
-
+    normalization = compute_normalization(data) 
 
     #========================================================
     # 
@@ -162,9 +199,17 @@ def train(env,
     # Note: You don't need to use a mixing ratio in this assignment for new and old data as described in https://arxiv.org/abs/1708.02596
     # 
     for itr in range(onpol_iters):
-        """ YOUR CODE HERE """
+        # refit the dynamics model to current dataset
+        dyn_model.fit(data)
+        
+        # take on-policy samples
+        paths = sample(env, mpc_controller, num_paths_onpol, env_horizon, render=render)
 
-
+        # aggregate samples to the dataset
+        data = np.concatenate((data, paths))
+        
+        returns = [np.sum(path['rewards']) for path in paths]
+        costs = [path_cost(cost_fn, path) for path in paths]
 
         # LOGGING
         # Statistics for performance of MPC policy using
@@ -222,8 +267,18 @@ def main():
         os.makedirs(logdir)
 
     # Make env
+
+    register(
+        id='HalfCheetahTorso-v1',
+        entry_point='cheetah_env2:HalfCheetahTorsoEnv',
+        reward_threshold=4800.0,
+        max_episode_steps=args.ep_len,
+        kwargs= dict(model_path=os.path.dirname(gym.envs.mujoco.__file__) + "/assets/half_cheetah.xml")
+    )
+
     if args.env_name is "HalfCheetah-v1":
-        env = HalfCheetahEnvNew()
+        env = gym.make('HalfCheetahTorso-v1')
+        env = wrappers.Monitor(env, logdir, force=True)
         cost_fn = cheetah_cost_fn
     train(env=env, 
                  cost_fn=cost_fn,
