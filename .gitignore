@@ -87,3 +87,9 @@ ENV/
 
 # Rope project settings
 .ropeproject
+
+# clion
+.idea/
+
+# vim
+*.swp
