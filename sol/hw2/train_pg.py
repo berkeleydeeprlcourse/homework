@@ -110,7 +110,6 @@ def train_PG(exp_name='',
     # _no - this tensor should have shape (batch size /n/, observation dim)
     # _na - this tensor should have shape (batch size /n/, action dim)
     # _n  - this tensor should have shape (batch size /n/)
-    # _nac - this tensor should have shape _n (discrete action) or _na (continuous action)
     # 
     # Note: batch size /n/ is defined at runtime, and until then, the shape for that axis
     # is None
@@ -132,9 +131,9 @@ def train_PG(exp_name='',
 
     # Actions are input when computing policy gradient updates
     if discrete:
-        sy_nac = tf.placeholder(shape=[None], name="ac", dtype=tf.int32)
+        sy_ac_na = tf.placeholder(shape=[None], name="ac", dtype=tf.int32)
     else:
-        sy_nac = tf.placeholder(shape=[None, ac_dim], name="ac", dtype=tf.float32)
+        sy_ac_na = tf.placeholder(shape=[None, ac_dim], name="ac", dtype=tf.float32)
 
     # Advantages are input when computing policy gradient updates
     sy_adv_n = tf.placeholder(shape=[None], name="adv", dtype=tf.float32)
@@ -185,27 +184,25 @@ def train_PG(exp_name='',
         sy_logits_na = build_mlp(sy_ob_no, ac_dim, "policy", n_layers=n_layers, size=size)
 
         # Sample an action from the stochastic policy
-        sy_sampled_nac = tf.multinomial(sy_logits_na, 1)
-        sy_sampled_nac = tf.reshape(sy_sampled_nac, [-1])
+        sy_sampled_ac = tf.reshape(tf.multinomial(sy_logits_na, 1), [-1]) # tf.multinomial draws samples from a multinomial distribution
 
         # Likelihood of chosen action
-        sy_logprob_n = -tf.nn.sparse_softmax_cross_entropy_with_logits(
-            labels=sy_nac, logits=sy_logits_na)
+        sy_logprob_n = -tf.nn.sparse_softmax_cross_entropy_with_logits(labels=sy_ac_na, logits=sy_logits_na)
 
     else:
         # YOUR_CODE_HERE
         # Compute Gaussian stochastic policy over continuous actions.
         # The mean is a function of observations, while the variance is not.
-        sy_mean_na = build_mlp(sy_ob_no, ac_dim, "policy", n_layers=n_layers, size=size)
+        sy_mean = build_mlp(sy_ob_no, ac_dim, "policy", n_layers=n_layers, size=size)
         sy_logstd = tf.Variable(tf.zeros([1, ac_dim]), name="policy/logstd", dtype=tf.float32)
         sy_std = tf.exp(sy_logstd)
 
         # Sample an action from the stochastic policy
-        sy_sampled_z = tf.random_normal(tf.shape(sy_mean_na))
-        sy_sampled_nac = sy_mean_na + sy_std * sy_sampled_z
+        sy_sampled_z = tf.random_normal(tf.shape(sy_mean)) # tf.random_normal outputs random values from a normal distribution
+        sy_sampled_ac = sy_mean + sy_std * sy_sampled_z
 
         # Likelihood of chosen action
-        sy_z = (sy_nac - sy_mean_na) / sy_std
+        sy_z = (sy_ac_na - sy_mean) / sy_std
         sy_logprob_n = -0.5 * tf.reduce_sum(tf.square(sy_z), axis=1)
 
 
@@ -228,12 +225,8 @@ def train_PG(exp_name='',
     #========================================================================================#
 
     if nn_baseline:
-        baseline_prediction = tf.squeeze(build_mlp(
-                                sy_ob_no, 
-                                1, 
-                                "nn_baseline",
-                                n_layers=n_layers,
-                                size=size))
+        baseline_prediction = tf.squeeze(build_mlp(sy_ob_no, 1, "nn_baseline", n_layers=n_layers, size=size))
+
         # Define placeholders for targets, a loss function and an update op for fitting a 
         # neural network baseline. These will be used to fit the neural network baseline. 
         # YOUR_CODE_HERE
@@ -278,7 +271,7 @@ def train_PG(exp_name='',
                     time.sleep(0.05)
                 obs.append(ob)
                 # Feed a batch of one observatioin to get a batch of one action
-                ac = sess.run(sy_sampled_nac, feed_dict={sy_ob_no : [ob]})
+                ac = sess.run(sy_sampled_ac, feed_dict={sy_ob_no : [ob]})
                 ac = ac[0]
                 acs.append(ac)
                 # Simulate one time step
@@ -458,7 +451,7 @@ def train_PG(exp_name='',
         # and after an update, and then log them below.
 
         # YOUR_CODE_HERE
-        sess.run(update_op, feed_dict={sy_ob_no : ob_no, sy_nac : ac_nac, sy_adv_n : adv_n})
+        sess.run(update_op, feed_dict={sy_ob_no : ob_no, sy_ac_na : ac_nac, sy_adv_n : adv_n})
 
         # Log diagnostics
         returns = [path["reward"].sum() for path in paths]
