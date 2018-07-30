@@ -93,6 +93,3 @@ ENV/
 
 # vim
 *.swp
-
-# solutions
-sol*
