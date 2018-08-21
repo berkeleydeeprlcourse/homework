@@ -1,6 +1,13 @@
 # CS294-112 HW 1: Imitation Learning
 
-Dependencies: Numpy, TensorFlow, MuJoCo version **1.31**, OpenAI Gym version **0.9.1**
+Dependencies:
+ * Python 3
+ * Numpy
+ * TensorFlow
+ * MuJoCo version **1.31** and mujoco-py **0.5.7**
+ * OpenAI Gym version **0.9.1**
+
+Once Python 3 is installed, you can install the remaining dependencies using `pip install -r requirements.txt`.
 
 **Note**: The MuJoCo and Gym versions above are **not** the latest releases.
 
