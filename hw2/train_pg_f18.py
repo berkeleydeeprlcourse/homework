@@ -309,7 +309,8 @@ class Agent(object):
             #====================================================================================#
             raise NotImplementedError
             ac = None # YOUR CODE HERE
-            acs.append(ac[0])
+            ac = ac[0]
+            acs.append(ac)
             ob, rew, done, _ = env.step(ac)
             rewards.append(rew)
             steps += 1
