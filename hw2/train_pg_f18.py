@@ -200,7 +200,9 @@ class Agent(object):
                         sy_mean: (batch_size, self.ac_dim)
                         sy_logstd: (self.ac_dim,)
 
-                sy_ac_na: (batch_size, self.ac_dim)
+                sy_ac_na: 
+                    if discrete: (batch_size)
+                    if continuous: (batch_size, self.ac_dim)
 
             returns:
                 sy_logprob_n: (batch_size)
