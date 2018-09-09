@@ -213,7 +213,6 @@ class Agent(object):
         if self.discrete:
             sy_logits_na = policy_parameters
             # YOUR_CODE_HERE
-            sy_sampled_ac = None
             sy_logprob_n = None
         else:
             sy_mean, sy_logstd = policy_parameters
