@@ -144,7 +144,7 @@ Please show that
 \end{align*}
 \item An alternative approach is to look at the entire trajectory and consider a particular timestep $t^* \in [1, T-1]$ (the timestep $T$ case would be very similar to part (a)). 
 \begin{enumerate}
-    \item We can exploit the conditional independency structure of $\pi_\theta(\tau) = p(s_1, a_1, ..., s_T, a_T)$ and use the law of iterated expectations to break Equation~\ref{unbiased_state_dependent_baseline} into two expectations, where the the outer expectation is over $(s_1, a_1, ..., a_{t^*}-1, s_{t^*})$, and the inner expectation is over the rest of the trajectory, conditioned on $(s_1, a_1, ..., a_{t^*}-1, s_{t^*})$. Explain why, for the inner expectation, conditioning on $(s_1, a_1, ..., a_{t^*}-1, s_{t^*})$ is equivalent to conditioning only on $s_{t^*}$.
+    \item We can exploit the conditional independency structure of $\pi_\theta(\tau) = p(s_1, a_1, ..., s_T, a_T)$ and use the law of iterated expectations to break Equation~\ref{unbiased_state_dependent_baseline} into two expectations, where the the outer expectation is over $(s_1, a_1, ..., a_{t^*-1}, s_{t^*})$, and the inner expectation is over the rest of the trajectory, conditioned on $(s_1, a_1, ..., a_{t^*-1}, s_{t^*})$. Explain why, for the inner expectation, conditioning on $(s_1, a_1, ..., a_{t^*-1}, s_{t^*})$ is equivalent to conditioning only on $s_{t^*}$.
     \item Using the iterated expectation described above, show that
 \begin{align} \label{unbiased_state_dependent_baseline}
 \nabla_\theta \mathbb{E}_{\tau \sim \pi_\theta(\tau)} \left[b\left(s_{t^*}\right)\right] = 0.
