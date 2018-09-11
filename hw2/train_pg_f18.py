@@ -472,12 +472,13 @@ class Agent(object):
             arguments:
                 ob_no: shape: (sum_of_path_lengths, ob_dim)
                 ac_na: shape: (sum_of_path_lengths).
-
-            returns:
                 q_n: shape: (sum_of_path_lengths). A single vector for the estimated q values 
                     whose length is the sum of the lengths of the paths
                 adv_n: shape: (sum_of_path_lengths). A single vector for the estimated 
                     advantages whose length is the sum of the lengths of the paths
+
+            returns:
+                nothing
 
         """
         #====================================================================================#
