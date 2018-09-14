@@ -131,11 +131,11 @@ In lecture we saw that the policy gradient is unbiased if the baseline is a cons
 \end{align*}
 By breaking up $p_\theta(\tau)$ into dynamics and policy terms, we can discard the dynamics terms, which are not functions of $\theta$:
 \begin{align*}
-&\mathbb{E}_{\tau \sim p_\theta(\tau)} \left[\sum_{t=1}^T \nabla_\theta \log \pi_\theta(a_t|s_t) \left(\sum_{t=1}^T r(s_t, a_t)\right)\right].
+&\mathbb{E}_{\tau \sim p_\theta(\tau)} \left[\sum_{t=1}^T \nabla_\theta \log \pi_\theta(a_t|s_t) \left(\sum_{t'=1}^T r(s_{t'}, a_{t'})\right)\right].
 \end{align*}
 When we subtract a state dependent baseline $b(s_t)$ (recall equation \ref{state_dependent_baseline}) we get
 \begin{align*}
-\mathbb{E}_{\tau \sim p_\theta(\tau)} \left[\sum_{t=1}^T \nabla_\theta \log \pi_\theta(a_t|s_t) \left(\left(\sum_{t=1}^T r(s_t, a_t)\right) - b(s_t)\right)\right].
+\mathbb{E}_{\tau \sim p_\theta(\tau)} \left[\sum_{t=1}^T \nabla_\theta \log \pi_\theta(a_t|s_t) \left(\left(\sum_{t'=1}^T r(s_{t'}, a_{t'})\right) - b(s_t)\right)\right].
 \end{align*}
 Our goal for this problem is to show that 
 \begin{align*}
