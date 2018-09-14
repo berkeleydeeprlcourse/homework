@@ -83,13 +83,13 @@ $$r(\tau) = r(s_1, a_1, ..., s_T, a_T) = \sum_{t=1}^T r(s_t, a_t).$$
 
 The policy gradient approach is to directly take the gradient of this objective:
 \begin{align}
-\nabla_\theta J(\theta) &= \nabla_\theta \int \pi_\theta(\tau) r(\tau) d\tau \\
-&= \int \pi_\theta(\tau) \nabla_\theta \log \pi_\theta(\tau) r(\tau) d\tau.
+\nabla_\theta J(\theta) &= \nabla_\theta \int \pi_\theta(\tau) r(\tau) d\tau \label{policygradientintegral} \\ 
+&= \int \pi_\theta(\tau) \nabla_\theta \log \pi_\theta(\tau) r(\tau) d\tau. \label{scorefunctionpg}
 \end{align}
 In practice, the expectation over trajectories $\tau$ can be approximated from a batch of $N$ sampled trajectories:
 \begin{align}
 \nabla_\theta J(\theta) &\approx \frac{1}{N} \sum_{i=1}^N \nabla_\theta \log \pi_\theta(\tau_i) r(\tau_i) \\
-&= \frac{1}{N} \sum_{i=1}^N \left(\sum_{t=1}^T \nabla_\theta \log \pi_\theta(a_{it} | s_{it})\right)\left(\sum_{t=1}^T r(s_{it}, a_{it})\right).
+&= \frac{1}{N} \sum_{i=1}^N \left(\sum_{t=1}^T \nabla_\theta \log \pi_\theta(a_{it} | s_{it})\right)\left(\sum_{t=1}^T r(s_{it}, a_{it})\right). \label{estimatedscorefunctionpg}
 \end{align}
 Here we see that the policy $\pi_\theta$ is a probability distribution over the action space, conditioned on the state. In the agent-environment loop, the agent samples an action $a_t$ from $\pi_\theta(\cdot | s_t)$ and the environment responds with a reward $r(s_t, a_t)$.
 
@@ -113,7 +113,7 @@ We have seen in lecture that subtracting a baseline that is a constant with resp
 \begin{align} \label{constant_wrt_tau}
 \nabla_\theta J(\theta) = \nabla_\theta \mathbb{E}_{\tau \sim \pi_\theta(\tau)} \left[r(\tau) - b\right]\
 \end{align}
-leaves the policy gradient unbiased because $$\nabla_\theta \mathbb{E}_{\tau \sim \pi_\theta(\tau)} \left[b\right] = 0.$$
+leaves the policy gradient unbiased because $$\nabla_\theta \mathbb{E}_{\tau \sim \pi_\theta(\tau)} \left[b\right] = \mathbb{E}_{\tau \sim \pi_\theta(\tau)} \left[\nabla_\theta \log \pi_\theta(\tau) \cdot b\right] = 0.$$
 
 In this assignment, we will implement a value function $V_\phi^\pi$ which acts as a \textit{state-dependent} baseline. The value function is trained to approximate the sum of future rewards starting from a particular state:
 \begin{align}
@@ -125,30 +125,39 @@ so the approximate policy gradient now looks like this:
 \end{align}
 
 \textbf{Problem 1. State-dependent baseline:}
-In lecture we saw that the policy gradient is unbiased if the baseline is a constant with respect to $\tau$ (Equation~\ref{constant_wrt_tau}). The purpose of this problem is to help convince ourselves that subtracting a state-dependent baseline from the return keeps the policy gradient unbiased. Using the \href{https://en.wikipedia.org/wiki/Law_of_total_expectation}{\textcolor{blue}{law of iterated expectations}} show that the policy gradient is still unbiased if the baseline $b$ is function of a state at a particular timestep of $\tau$ (Equation~\ref{state_dependent_baseline}).
-Please answer the questions below in \LaTeX in your report.
-\begin{enumerate} [label=(\alph*)]
-\item Note that by \href{https://brilliant.org/wiki/linearity-of-expectation/}{\textcolor{blue}{linearity of expectation}} the objective can be written as:
+In lecture we saw that the policy gradient is unbiased if the baseline is a constant with respect to $\tau$ (Equation~\ref{constant_wrt_tau}). The purpose of this problem is to help convince ourselves that subtracting a state-dependent baseline from the return keeps the policy gradient unbiased. For clarity we will use $p_\theta(\tau)$ instead of $\pi_\theta(\tau)$, although they mean the same thing. Using the \href{https://en.wikipedia.org/wiki/Law_of_total_expectation}{\textcolor{blue}{law of iterated expectations}} we will show that the policy gradient is still unbiased if the baseline $b$ is function of a state at a particular timestep of $\tau$ (Equation~\ref{state_dependent_baseline}). Recall from equation \ref{scorefunctionpg} that the policy gradient can be expressed as
 \begin{align*}
-    J(\theta) &= \mathbb{E}_{\tau \sim \pi_\theta(\tau)} \left[r(\tau)\right] \\
-    &= \mathbb{E}_{\tau \sim \pi_\theta(\tau)} \left[\sum_{t=1}^{T} r(s_t, a_t)\right] \\
-    &= \sum_{t=1}^{T} \mathbb{E}_{(s_t, a_t) \sim p(s_t, a_t)} \left[r(s_t, a_t)\right] \\
+&\mathbb{E}_{\tau \sim p_\theta(\tau)} \left[\nabla_\theta \log p_\theta(\tau)r(\tau)\right].
 \end{align*}
-when we subtract the baseline $b(s_t)$, the objective becomes:
+By breaking up $p_\theta(\tau)$ into dynamics and policy terms, we can discard the dynamics terms, which are not functions of $\theta$:
 \begin{align*}
-    &= \sum_{t=1}^{T} \mathbb{E}_{(s_t, a_t) \sim p(s_t, a_t)} \left[r(s_t, a_t) - b(s_t)\right].
+&\mathbb{E}_{\tau \sim p_\theta(\tau)} \left[\sum_{t=1}^T \nabla_\theta \log \pi_\theta(a_t|s_t) \left(\sum_{t=1}^T r(s_t, a_t)\right)\right].
 \end{align*}
-Please show that
+When we subtract a state dependent baseline $b(s_t)$ (recall equation \ref{state_dependent_baseline}) we get
 \begin{align*}
-\nabla_\theta \sum_{t=1}^{T} \mathbb{E}_{(s_t, a_t) \sim p(s_t, a_t)} \left[b(s_t)\right] = 0.
+\mathbb{E}_{\tau \sim p_\theta(\tau)} \left[\sum_{t=1}^T \nabla_\theta \log \pi_\theta(a_t|s_t) \left(\left(\sum_{t=1}^T r(s_t, a_t)\right) - b(s_t)\right)\right].
 \end{align*}
-\item An alternative approach is to look at the entire trajectory and consider a particular timestep $t^* \in [1, T-1]$ (the timestep $T$ case would be very similar to part (a)). 
-\begin{enumerate}
-    \item We can exploit the conditional independency structure of $\pi_\theta(\tau) = p(s_1, a_1, ..., s_T, a_T)$ and use the law of iterated expectations to break Equation~\ref{unbiased_state_dependent_baseline} into two expectations, where the the outer expectation is over $(s_1, a_1, ..., a_{t^*-1}, s_{t^*})$, and the inner expectation is over the rest of the trajectory, conditioned on $(s_1, a_1, ..., a_{t^*-1}, s_{t^*})$. Explain why, for the inner expectation, conditioning on $(s_1, a_1, ..., a_{t^*-1}, s_{t^*})$ is equivalent to conditioning only on $s_{t^*}$.
-    \item Using the iterated expectation described above, show that
-\begin{align} \label{unbiased_state_dependent_baseline}
-\nabla_\theta \mathbb{E}_{\tau \sim \pi_\theta(\tau)} \left[b\left(s_{t^*}\right)\right] = 0.
+Our goal for this problem is to show that 
+\begin{align*}
+\mathbb{E}_{\tau \sim p_\theta(\tau)} \left[\sum_{t=1}^T \nabla_\theta \log \pi_\theta(a_t|s_t) b(s_t)\right] = 0.
+\end{align*}
+By \href{https://brilliant.org/wiki/linearity-of-expectation/}{\textcolor{blue}{linearity of expectation}} we can consider each term in this sum independently, so we can equivalently show that
+\begin{align} \label{independent}
+\sum_{t=1}^T \mathbb{E}_{\tau \sim p_\theta(\tau)}\left[ \nabla_\theta \log \pi_\theta(a_t|s_t) \left(b(s_t)\right)\right] = 0.
 \end{align}
+\begin{enumerate} [label=(\alph*)]
+\item Using the chain rule, we can express $p_\theta(\tau)$ as a product of the state-action marginal $(s_t, a_t)$ and the probability of the rest of the trajectory conditioned on $(s_t, a_t)$ (which we denote as $(\tau / s_t, a_t | s_t, a_t)$):
+    \begin{align*}
+        p_\theta(\tau) = p_\theta(s_t, a_t)p_\theta(\tau / s_t, a_t | s_t, a_t)
+    \end{align*}
+    Please show equation \ref{independent} by using the law of iterated expectations, breaking $\mathbb{E}_{\tau \sim p_\theta(\tau)}$ by decoupling the state-action marginal from the rest of the trajectory.
+\item Alternatively, we can consider the structure of the MDP and express $p_\theta(\tau)$ as a product of the trajectory distribution up to $s_t$ (which we denote as $(s_{1:t}, a_{1:t-1})$) and the trajectory distribution after $s_t$ conditioned on the first part (which we denote as $(s_{t+1:T}, a_{t:T} | s_{1:t}, a_{1:t-1})$):
+    \begin{align*}
+        p_\theta(\tau) = p_\theta(s_{1:t}, a_{1:t-1}) p_\theta(s_{t+1:T}, a_{t:T} | s_{1:t}, a_{1:t-1})
+    \end{align*}
+\begin{enumerate}
+\item Explain why, for the inner expectation, conditioning on $(s_1, a_1, ..., a_{t^*-1}, s_{t^*})$ is equivalent to conditioning only on $s_{t^*}$.
+\item Please show equation \ref{independent} by using the law of iterated expectations, breaking $\mathbb{E}_{\tau \sim p_\theta(\tau)}$ by decoupling trajectory up to $s_t$ from the trajectory after $s_t$.
 \end{enumerate}
 \end{enumerate}
 Since the policy gradient with respect to $\theta$ can be decoupled as a summation of terms over timesteps $t \in [1, T]$, because we have shown that the policy gradient is unbiased for each of these terms,
@@ -227,8 +236,8 @@ What's happening there:
 \item \verb|-n| : Number of iterations.
 \item \verb|-b| : Batch size (number of state-action pairs sampled while acting according to the current policy at each iteration).
 \item \verb|-e| : Number of experiments to run with the same configuration. Each experiment will start with a different randomly initialized policy, and have a different stream of random numbers. 
-\item \verb|-dna| : Flag: if present, sets \verb|normalize_advantages| to False. Otherwise, by default, \verb|normalize_advantages=True|. 
-\item \verb|-rtg| : Flag: if present, sets \verb|reward_to_go=True|. Otherwise, by default, \verb|reward_to_go=False|. 
+\item \verb|-dna| : Flag: if present, sets \verb|normalize_advantages| to False. Otherwise, by default, \verb|normalize_advantages=True|.
+\item \verb|-rtg| : Flag: if present, sets \verb|reward_to_go=True|. Otherwise, \verb|reward_to_go=False| by default. 
 \item \verb|--exp_name| : Name for experiment, which goes into the name for the data directory.
 \end{itemize}
 
@@ -313,6 +322,8 @@ python train_pg_f18.py HalfCheetah-v2 -ep 150 --discount 0.9 -n 100 -e 3 -l 2 -s
 python train_pg_f18.py HalfCheetah-v2 -ep 150 --discount 0.9 -n 100 -e 3 -l 2 -s 32 -b <b*> -lr <r*> -rtg --nn_baseline --exp_name hc_b<b*>_r<r*>
 \end{lstlisting}
 The run with reward-to-go and the baseline should achieve an average score close to 200. Provide a single plot plotting the learning curves for all four runs.
+
+\textcolor{red}{NOTE: In an earlier version of the homework (before 9/13/18) we had the discount as 0.9, in which case the run with reward-to-go and baseline should achieve an average score close to 150, and there would not be much difference between the runs with reward-to-go (with or without baseline). If you have already done this part with a discount of 0.9, you do not need to redo the problem, but you would then expect the best scoring run to be about 150 rather than 200.}
 \end{itemize}
 
 
