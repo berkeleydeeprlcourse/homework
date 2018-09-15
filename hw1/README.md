@@ -25,3 +25,12 @@ In `experts/`, the provided expert policies are:
 * Walker2d-v2.pkl
 
 The name of the pickle file corresponds to the name of the gym environment.
+
+## Instructions to run submission (to replicate Question 2 part 2/3)
+Run the command `make -B clean_data; make -B gen_behavior_cloning_data_chart`. This will produce the data for the plot in Question 2 Part 2, with which I entered into a latex table. Look at the directory `behavior_cloning_data/table_data` for output evaluation results for both the Expert and the Imitation Learner (for both ant and hopper).
+
+In order to produce the hyper-parameter sweep for Question 2 Part 3, run the command `make -B clean_data; make -B gen_behavior_cloning_hyperparamter_data`. Look in the `behavior_cloning_data` directory to find files named `Ant-v2_r{ROLLOUTS}.txt` where `{ROLLOUTS}` represents the number of rollouts and therefore the number of demonstrations.
+
+
+## Instructions to run submission (to replicate Question 3)
+To replicate the results for this experiment, run `make -B clean_data; make -B gen_behavior_cloning_data; make -B gen_dagger_data`. This will take a while. Look for the results in the `dagger_data` directory where CSV files are named `{TASK_NAME}.pkl` (even though the files end with pkl, they are CSV files and can be opened by Excel).
