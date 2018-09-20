@@ -13,7 +13,7 @@ Dependencies:
 
 Before doing anything, first replace `gym/envs/box2d/lunar_lander.py` with the provided `lunar_lander.py` file.
 
-The only file that you need to look at is `dqn.py`, which you will implement.
+The only files that you need to look at are `dqn.py` and `train_ac_f18.py`, which you will implement.
 
 See the [HW3 PDF](http://rail.eecs.berkeley.edu/deeprlcourse/static/homeworks/hw3.pdf) for further instructions.
 
