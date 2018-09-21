@@ -410,6 +410,13 @@ class LunarLander(gym.Env):
 
         return self.viewer.render(return_rgb_array = mode=='rgb_array')
 
+    def reset(self):
+        return self._reset()
+
+    def step(self, *args, **kwargs):
+        return self._step(*args, **kwargs)
+
+
 class LunarLanderContinuous(LunarLander):
    continuous = True
 
