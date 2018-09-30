@@ -268,7 +268,7 @@ Various other command line arguments will allow you to set batch size, learning 
 
 \textbf{Problem 5. InvertedPendulum:} Run experiments in \verb|InvertedPendulum-v2| continuous control environment as follows:
 \begin{lstlisting}
-python train_pg_f18.py InvertedPendulum-v2 -ep 1000 --discount 0.9 -n 100 -e 3 -l 2 -s 64 -b <b*> -lr <r*> -rtg --exp_name hc_b<b*>_r<r*>
+python train_pg_f18.py InvertedPendulum-v2 -ep 1000 --discount 0.9 -n 100 -e 3 -l 2 -s 64 -b <b*> -lr <r*> -rtg --exp_name ip_b<b*>_r<r*>
 \end{lstlisting}
 where your task is to find the smallest batch size \texttt{b*} and largest learning rate \texttt{r*} that gets to optimum (maximum score of 1000) in less than 100 iterations. The policy performance may fluctuate around 1000 -- this is fine. The precision of \texttt{b*} and \texttt{r*} need only be one significant digit.
 
