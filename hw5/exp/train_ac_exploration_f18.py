@@ -552,10 +552,10 @@ def train_AC(
             print('average state', np.mean(ob_no, axis=0))
             print('average action', np.mean(ac_na, axis=0))
 
-            # Logging stuff. Comment this in if you would like to visualize trajectories.
+            # Logging stuff.
             # Only works for point mass.
-            # np.save(os.path.join(dirname, '{}'.format(itr)), ob_no)
-            # env.visualize(ob_no, itr, dirname)
+            if env_name == 'PointMass-v0':
+                np.save(os.path.join(dirname, '{}'.format(itr)), ob_no)
         ########################################################################
         agent.update_critic(ob_no, next_ob_no, re_n, terminal_n)
         adv_n = agent.estimate_advantage(ob_no, next_ob_no, re_n, terminal_n)

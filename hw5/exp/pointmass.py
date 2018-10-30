@@ -132,16 +132,15 @@ class PointMass(Env):
             sorted_fnames = sorted(filenames, key=lambda x: int(x.split('.png')[0]))
         for f in sorted_fnames:
             images.append(imageio.imread(os.path.join(dirname, f)))
-        imageio.mimsave(os.path.join(dirname, 'hist_exploration.gif'), images)
+        imageio.mimsave(os.path.join(dirname, 'exploration.gif'), images)
 
     def create_visualization(self, dirname, density=False):
-        for s in [1, 11, 21]:
+        for s in os.listdir(dirname):
             for i in tqdm(range(100)):
-                self.visualize(None, i, os.path.join(dirname, str(s)))
+                self.visualize(None, i, os.path.join(dirname, s))
             self.create_gif(os.path.join(dirname, str(s)))
 
-
-if __name__ == "__main__":
+def debug():
     logdir = 'pm_debug'
     os.mkdir(logdir)
     num_episodes = 10
@@ -157,6 +156,17 @@ if __name__ == "__main__":
             states.append(state)
         env.visualize(np.array(states), epoch, logdir)
     env.create_gif(logdir)
+
+
+if __name__ == "__main__":
+    # debug()  # run this if you want to get a feel for how the PointMass environment works (make sure to comment out the code below)
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('dirname', type=str)
+    args = parser.parse_args()
+    env = PointMass()
+    env.create_visualization(args.dirname)
+
 
 
 
