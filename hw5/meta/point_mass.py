@@ -6,7 +6,7 @@ from gym import Env
 class PointEnv(Env):
     """
     point mass on a 2-D plane
-    two tasks: move to (-1, -1) or move to (1,1)
+    goals are sampled randomly from a square
     """
 
     def __init__(self, num_tasks=1):

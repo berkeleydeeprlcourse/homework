@@ -6,7 +6,7 @@ from gym import Env
 class ObservedPointEnv(Env):
     """
     point mass on a 2-D plane
-    two tasks: move to (-1, -1) or move to (1,1)
+    four tasks: move to (-10, -10), (-10, 10), (10, -10), (10, 10)
 
     Problem 1: augment the observation with a one-hot vector encoding the task ID
      - change the dimension of the observation space
