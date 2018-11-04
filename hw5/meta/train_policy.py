@@ -117,6 +117,7 @@ def build_critic(x, h, output_size, scope, n_layers, size, gru_size, recurrent=T
         if recurrent:
             x, h = build_rnn(x, h, gru_size, scope, n_layers, size, gru_size, activation=activation, output_activation=output_activation, regularizer=regularizer)
         else:
+            x = tf.reshape(x, (-1, x.get_shape()[1]*x.get_shape()[2]))
             x = build_mlp(x, gru_size, scope, n_layers + 1, size, activation=activation, output_activation=activation, regularizer=regularizer)
         x = tf.layers.dense(x, output_size, activation=output_activation, name='decoder', kernel_regularizer=regularizer, bias_regularizer=regularizer)
     return x
