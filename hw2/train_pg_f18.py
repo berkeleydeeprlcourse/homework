@@ -227,7 +227,12 @@ class Agent(object):
         else:
             sy_mean, sy_logstd = policy_parameters
             # YOUR_CODE_HERE
-            sy_logprob_n = None
+            # http://cs229.stanford.edu/section/gaussians.pdf
+            std = tf.exp(sy_logstd)
+
+            # TODO: condense the following crap
+            sy_logprob_n = tf.log(1/(np.sqrt(2*np.pi) * std) *
+             tf.exp(-1/(2*std*std)*(sy_ac_na-sy_mean)))
         return sy_logprob_n
 
     def build_computation_graph(self):
@@ -268,7 +273,8 @@ class Agent(object):
         #                           ----------PROBLEM 2----------
         # Loss Function and Training Operation
         #========================================================================================#
-        loss = None # YOUR CODE HERE
+        # YOUR CODE HERE
+        loss = tf.reduce_mean(self.sy_logprob_n * self.sy_adv_n)
         self.update_op = tf.train.AdamOptimizer(self.learning_rate).minimize(loss)
 
         #========================================================================================#

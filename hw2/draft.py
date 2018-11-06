@@ -4,6 +4,8 @@ import numpy as np
 # x = tf.placeholder("float", [None, 3])
 # y = x * 2
 
+# batch index
+# https://stackoverflow.com/questions/51052203/tensorflow-indexing-according-to-batch-position
 ob_dim = 4
 logits=tf.placeholder(shape=[None, ob_dim], name="ob", dtype=tf.float32)
 actions=tf.placeholder(shape=[None], name="ac", dtype=tf.int32)
