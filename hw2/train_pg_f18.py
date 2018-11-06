@@ -38,7 +38,11 @@ def build_mlp(input_placeholder, output_size, scope, n_layers, size, activation=
         Hint: use tf.layers.dense    
     """
     # YOUR CODE HERE
-    raise NotImplementedError
+    with tf.variable_scope(scope):
+        layer = tf.layers.dense(input_placeholder, size, activation = activation)
+        for i in range(1, n_layers-1):
+            layer = tf.layers.dense(layer, size, activation = activation)
+        output_placeholder = tf.layers.dense(layer, output_size, activation = output_activation)
     return output_placeholder
 
 def pathlength(path):
@@ -95,14 +99,13 @@ class Agent(object):
                 sy_ac_na: placeholder for actions
                 sy_adv_n: placeholder for advantages
         """
-        raise NotImplementedError
         sy_ob_no = tf.placeholder(shape=[None, self.ob_dim], name="ob", dtype=tf.float32)
         if self.discrete:
             sy_ac_na = tf.placeholder(shape=[None], name="ac", dtype=tf.int32) 
         else:
             sy_ac_na = tf.placeholder(shape=[None, self.ac_dim], name="ac", dtype=tf.float32) 
         # YOUR CODE HERE
-        sy_adv_n = None
+        sy_adv_n = tf.placeholder(shape=[None], name = "adv", dtype = tf.float32)
         return sy_ob_no, sy_ac_na, sy_adv_n
 
 
@@ -134,15 +137,16 @@ class Agent(object):
                 Pass in self.n_layers for the 'n_layers' argument, and
                 pass in self.size for the 'size' argument.
         """
-        raise NotImplementedError
+        scope = "policy_forward"
         if self.discrete:
             # YOUR_CODE_HERE
-            sy_logits_na = None
+            sy_logits_na = build_mlp(sy_ob_no, self.ac_dim, scope, self.n_layers, self.size)
             return sy_logits_na
         else:
             # YOUR_CODE_HERE
-            sy_mean = None
-            sy_logstd = None
+            sy_mean = build_mlp(sy_ob_no, self.ac_dim, scope, self.n_layers, self.size)
+            with tf.variable(scope):
+                sy_logstd = tf.get_variable("log_std", shape = [self.ac_dim], trainable = True)
             return (sy_mean, sy_logstd)
 
     #========================================================================================#
@@ -172,15 +176,19 @@ class Agent(object):
         
                  This reduces the problem to just sampling z. (Hint: use tf.random_normal!)
         """
-        raise NotImplementedError
         if self.discrete:
             sy_logits_na = policy_parameters
             # YOUR_CODE_HERE
-            sy_sampled_ac = None
+            # gumbel trick: argmax(log(x) + log(log(1/U))), U = random uniform distributioon in the size of logits
+            # to replace np.choice(sy_ogits_na)
+            # from openAI impl
+            uniform_noise = tf.random_uniform(tf.shape(sy_logits_na))
+            sy_sampled_ac = tf.argmax(sy_logits_na - tf.log(-tf.log(uniform_noise)), 1)
         else:
             sy_mean, sy_logstd = policy_parameters
             # YOUR_CODE_HERE
-            sy_sampled_ac = None
+            z = tf.random_normal(self.ac_dim, mean=0.0, stddev=1.0)
+            sy_sampled_ac = sy_mean + sy_logstd * z
         return sy_sampled_ac
 
     #========================================================================================#
@@ -209,11 +217,13 @@ class Agent(object):
                 For the discrete case, use the log probability under a categorical distribution.
                 For the continuous case, use the log probability under a multivariate gaussian.
         """
-        raise NotImplementedError
         if self.discrete:
-            sy_logits_na = policy_parameters
             # YOUR_CODE_HERE
-            sy_logprob_n = None
+            row_indices = tf.range(tf.size(sy_ac_na))
+            action_indices = tf.stack([row_indices, actions], axis = 1)
+            logits = tf.gather_nd(policy_parameters, action_indices)
+            odds = tf.exp(logits)
+            sy_logprob_n = tf.log(odds/(odds+1))
         else:
             sy_mean, sy_logstd = policy_parameters
             # YOUR_CODE_HERE
