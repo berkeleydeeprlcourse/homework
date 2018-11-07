@@ -380,6 +380,7 @@ class Agent(object):
                 steps += 1
 
             # index into the meta_obs array to get the window that ends with the current timestep
+            # please name the windowed observation `in_` for compatibilty with the code that adds to the replay buffer (lines 418, 420)
             # YOUR CODE HERE
 
             hidden = np.zeros((1, self.gru_size), dtype=np.float32)
