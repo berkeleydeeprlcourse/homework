@@ -31,9 +31,6 @@ class PointEnv(Env):
         y = np.random.uniform(-10, 10)
         self._goal = np.array([x, y])
 
-    def get_all_task_idx(self):
-        return [0]
-
     def reset(self):
         self._state = np.array([0, 0], dtype=np.float32)
         return self._get_obs()
