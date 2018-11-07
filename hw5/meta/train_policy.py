@@ -689,8 +689,11 @@ def train_PG(
 
         # sample trajectories to fill agent's replay buffer
         print("********** Iteration %i ************"%itr)
-        stats, timesteps_this_batch = agent.sample_trajectories(itr, env, min_timesteps_per_batch)
-        total_timesteps += timesteps_this_batch
+        stats = []
+        for _ in range(num_tasks):
+            s, timesteps_this_batch = agent.sample_trajectories(itr, env, min_timesteps_per_batch)
+            total_timesteps += timesteps_this_batch
+            stats += s
 
         # compute the log probs, advantages, and returns for all data in agent's buffer
         # store in ppo buffer for use in multiple ppo updates
@@ -720,7 +723,10 @@ def train_PG(
 
         # compute validation statistics
         print('Validating...')
-        val_stats, timesteps_this_batch = agent.sample_trajectories(itr, env, min_timesteps_per_batch // 10, is_evaluation=True)
+        val_stats = []
+        for _ in range(num_tasks):
+            vs, timesteps_this_batch = agent.sample_trajectories(itr, env, min_timesteps_per_batch // 10, is_evaluation=True)
+            val_stats += vs
 
         # save trajectories for viz
         with open("output/{}-epoch{}.pkl".format(exp_name, itr), 'wb') as f:

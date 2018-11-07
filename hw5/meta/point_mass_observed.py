@@ -18,6 +18,7 @@ class ObservedPointEnv(Env):
     # YOUR CODE SOMEWHERE HERE
     def __init__(self, num_tasks=1):
         self.tasks = [0, 1, 2, 3][:num_tasks]
+        self.task_idx = -1
         self.reset_task()
         self.reset()
 
@@ -25,10 +26,15 @@ class ObservedPointEnv(Env):
         self.action_space = spaces.Box(low=-0.1, high=0.1, shape=(2,))
 
     def reset_task(self, is_evaluation=False):
-        idx = np.random.choice(len(self.tasks))
-        self._task = self.tasks[idx]
+        # for evaluation, cycle deterministically through all tasks
+        if is_evaluation:
+            self.task_idx = (self.task_idx + 1) % len(self.tasks)
+        # during training, sample tasks randomly
+        else:
+            self.task_idx = np.random.randint(len(self.tasks))
+        self._task = self.tasks[self.task_idx]
         goals = [[-1, -1], [-1, 1], [1, -1], [1, 1]]
-        self._goal = np.array(goals[idx])*10
+        self._goal = np.array(goals[self.task_idx])*10
 
     def reset(self):
         self._state = np.array([0, 0], dtype=np.float32)
