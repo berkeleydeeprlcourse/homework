@@ -546,8 +546,9 @@ class Agent(object):
 
         # YOUR_CODE_HERE
         with self.sess as session:
-            #TODO: add logz on loss before update, how? sess run on loss?
-            loss_result, _ = ession.run([self.loss, self.update_op],
+            #TODO: VALIDATE line 550
+            logz.log_tabular("before-update: loss--", session.run(self.loss))
+            loss_result, _ = session.run([self.loss, self.update_op],
                 feed_dict={self.sy_ob_no: ob_no, self.sy_ac_na: ac_na, self.sy_adv_n: adv_n})
             logz.log_tabular("after-update: loss--", loss_result)
 
