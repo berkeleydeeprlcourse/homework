@@ -220,10 +220,9 @@ class Agent(object):
         if self.discrete:
             # YOUR_CODE_HERE
             row_indices = tf.range(tf.size(sy_ac_na))
-            action_indices = tf.stack([row_indices, actions], axis = 1)
+            action_indices = tf.stack([row_indices, sy_ac_na], axis = 1)
             logits = tf.gather_nd(policy_parameters, action_indices)
-            odds = tf.exp(logits)
-            sy_logprob_n = tf.log(odds/(odds+1))
+            sy_logprob_n = tf.nn.softmax_cross_entropy_with_logits(labels=sy_ac_na, logits)
         else:
             sy_mean, sy_logstd = policy_parameters
             # YOUR_CODE_HERE
@@ -274,8 +273,8 @@ class Agent(object):
         # Loss Function and Training Operation
         #========================================================================================#
         # YOUR CODE HERE
-        loss = tf.reduce_mean(self.sy_logprob_n * self.sy_adv_n)
-        self.update_op = tf.train.AdamOptimizer(self.learning_rate).minimize(loss)
+        self.loss = tf.reduce_mean(self.sy_logprob_n * self.sy_adv_n)
+        self.update_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
 
         #========================================================================================#
         #                           ----------PROBLEM 6----------
@@ -322,8 +321,7 @@ class Agent(object):
             #====================================================================================#
             #                           ----------PROBLEM 3----------
             #====================================================================================#
-            raise NotImplementedError
-            ac = None # YOUR CODE HERE
+            ac = self.sy_sampled_ac # YOUR CODE HERE
             ac = ac[0]
             acs.append(ac)
             ob, rew, done, _ = env.step(ac)
@@ -406,10 +404,28 @@ class Agent(object):
             like the 'ob_no' and 'ac_na' above. 
         """
         # YOUR_CODE_HERE
+        sum_of_path_lengths = sum([len(re) for re in re_n])
+        q_n = np.zeros(sum_of_path_lengths)
+        counter = 0
         if self.reward_to_go:
-            raise NotImplementedError
+            for re in re_n:
+                start = counter
+                for i, r in enumerate(re[::-1]):
+                    index = start + len(re) - 1 - i
+                    print(index)
+                    if i == 0:
+                        q_n[index] = r
+                    else:
+                        q_n[index] = r +  self.gamma* q_n[index+1]
+                    counter+=1
         else:
-            raise NotImplementedError
+            for re in re_n:
+                for i, r in enumerate(re):
+                    if i == 0:
+                        q_n[counter] = r
+                    else:
+                        q_n[counter] = self.gamma**(i) * r + q_n[counter-1]
+                    counter+=1
         return q_n
 
     def compute_advantage(self, ob_no, q_n):
@@ -476,8 +492,9 @@ class Agent(object):
         if self.normalize_advantages:
             # On the next line, implement a trick which is known empirically to reduce variance
             # in policy gradient methods: normalize adv_n to have mean zero and std=1.
-            raise NotImplementedError
-            adv_n = None # YOUR_CODE_HERE
+            mean = np.mean(adv_n)
+            std = np.std(adv_n)
+            adv_n = (adv_n-mean)/std # YOUR_CODE_HERE
         return q_n, adv_n
 
     def update_parameters(self, ob_no, ac_na, q_n, adv_n):
@@ -528,8 +545,11 @@ class Agent(object):
         # and after an update, and then log them below. 
 
         # YOUR_CODE_HERE
-        raise NotImplementedError
-
+        with self.sess as session:
+            #TODO: add logz on loss before update, how? sess run on loss?
+            loss_result, _ = ession.run([self.loss, self.update_op],
+                feed_dict={self.sy_ob_no: ob_no, self.sy_ac_na: ac_na, self.sy_adv_n: adv_n})
+            logz.log_tabular("after-update: loss--", loss_result)
 
 def train_PG(
         exp_name,
