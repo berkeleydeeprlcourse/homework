@@ -64,6 +64,7 @@ def build_rnn(x, h, output_size, scope, n_layers, size, activation=tf.tanh, outp
 
     make MLP layers with `size` number of units
     make the GRU with `output_size` number of units
+    use `activation` as the activation function for both MLP and GRU
 
     arguments:
         (see `build_policy()`)
@@ -99,7 +100,7 @@ def build_policy(x, h, output_size, scope, n_layers, size, gru_size, recurrent=T
     """
     with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
         if recurrent:
-            x, h = build_rnn(x, h, gru_size, scope, n_layers, size, activation=activation, output_activation=output_activation)
+            x, h = build_rnn(x, h, gru_size, scope, n_layers, size, activation=activation, output_activation=activation)
         else:
             x = tf.reshape(x, (-1, x.get_shape()[1]*x.get_shape()[2]))
             x = build_mlp(x, gru_size, scope, n_layers + 1, size, activation=activation, output_activation=activation)
