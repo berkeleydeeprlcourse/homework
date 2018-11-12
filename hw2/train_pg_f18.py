@@ -222,7 +222,7 @@ class Agent(object):
             row_indices = tf.range(tf.size(sy_ac_na))
             action_indices = tf.stack([row_indices, sy_ac_na], axis = 1)
             logits = tf.gather_nd(policy_parameters, action_indices)
-            sy_logprob_n = tf.nn.softmax_cross_entropy_with_logits(labels=sy_ac_na, logits)
+            sy_logprob_n = tf.nn.softmax_cross_entropy_with_logits_v2(labels=sy_ac_na, logits=logits)
         else:
             sy_mean, sy_logstd = policy_parameters
             # YOUR_CODE_HERE
@@ -273,8 +273,8 @@ class Agent(object):
         # Loss Function and Training Operation
         #========================================================================================#
         # YOUR CODE HERE
-        self.loss = tf.reduce_mean(self.sy_logprob_n * self.sy_adv_n)
-        self.update_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
+        loss = tf.reduce_mean(self.sy_logprob_n * self.sy_adv_n)
+        self.update_op = tf.train.AdamOptimizer(self.learning_rate).minimize(loss)
 
         #========================================================================================#
         #                           ----------PROBLEM 6----------
@@ -321,7 +321,10 @@ class Agent(object):
             #====================================================================================#
             #                           ----------PROBLEM 3----------
             #====================================================================================#
-            ac = self.sy_sampled_ac # YOUR CODE HERE
+            ac = None 
+            # self.sy_sampled_ac # YOUR CODE HERE
+            with self.sess.as_default() as session:
+                ac = session.run(self.sy_sampled_ac, feed_dict={self.sy_ob_no: [ob]})
             ac = ac[0]
             acs.append(ac)
             ob, rew, done, _ = env.step(ac)
@@ -495,6 +498,7 @@ class Agent(object):
             mean = np.mean(adv_n)
             std = np.std(adv_n)
             adv_n = (adv_n-mean)/std # YOUR_CODE_HERE
+            print("Advantage", adv_n)
         return q_n, adv_n
 
     def update_parameters(self, ob_no, ac_na, q_n, adv_n):
@@ -545,12 +549,13 @@ class Agent(object):
         # and after an update, and then log them below. 
 
         # YOUR_CODE_HERE
-        with self.sess as session:
-            #TODO: VALIDATE line 550
-            logz.log_tabular("before-update: loss--", session.run(self.loss))
-            loss_result, _ = session.run([self.loss, self.update_op],
+        with self.sess.as_default() as session:
+            #TODO: HOW TO PRINT OUT LOSSES IN EACH RUN??
+            session.run(self.update_op,
                 feed_dict={self.sy_ob_no: ob_no, self.sy_ac_na: ac_na, self.sy_adv_n: adv_n})
-            logz.log_tabular("after-update: loss--", loss_result)
+            # session.run(self.update_op,
+            #     feed_dict={self.loss: loss_result})
+            # logz.log_tabular("New Loss", loss_result)
 
 def train_PG(
         exp_name,
