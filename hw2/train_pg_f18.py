@@ -11,6 +11,7 @@ import os
 import time
 import inspect
 from multiprocessing import Process
+import itertools
 
 #============================================================================================#
 # Utilities
@@ -39,9 +40,9 @@ def build_mlp(input_placeholder, output_size, scope, n_layers, size, activation=
     """
     # YOUR CODE HERE
     with tf.variable_scope(scope):
-        layer = tf.layers.dense(input_placeholder, size, activation = activation)
-        for i in range(1, n_layers-1):
-            layer = tf.layers.dense(layer, size, activation = activation)
+        layer = input_placeholder
+        for i in range(n_layers):
+            layer = tf.layers.dense(layer, size, activation = activation, kernel_initializer = 'glorot_normal', bias_initializer='zeros')
         output_placeholder = tf.layers.dense(layer, output_size, activation = output_activation)
     return output_placeholder
 
@@ -177,7 +178,7 @@ class Agent(object):
                  This reduces the problem to just sampling z. (Hint: use tf.random_normal!)
         """
         if self.discrete:
-            sy_logits_na = policy_parameters
+            sy_logits_na = tf.nn.softmax(policy_parameters)
             # YOUR_CODE_HERE
             # gumbel trick: argmax(log(x) + log(log(1/U))), U = random uniform distributioon in the size of logits
             # to replace np.choice(sy_ogits_na)
@@ -273,8 +274,8 @@ class Agent(object):
         # Loss Function and Training Operation
         #========================================================================================#
         # YOUR CODE HERE
-        loss = tf.reduce_mean(self.sy_logprob_n * self.sy_adv_n)
-        self.update_op = tf.train.AdamOptimizer(self.learning_rate).minimize(loss)
+        self.loss = tf.reduce_mean(self.sy_logprob_n * self.sy_adv_n)
+        self.update_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
 
         #========================================================================================#
         #                           ----------PROBLEM 6----------
@@ -340,6 +341,14 @@ class Agent(object):
     #====================================================================================#
     #                           ----------PROBLEM 3----------
     #====================================================================================#
+    def discount_and_normalize_rewards(self, episode_rewards):
+        discounted_episode_rewards = np.zeros(len(episode_rewards))
+        cumulative = 0.0
+        for i in reversed(range(len(episode_rewards))):
+            cumulative = cumulative * self.gamma + episode_rewards[i]
+            discounted_episode_rewards[i] = cumulative
+        return discounted_episode_rewards
+
     def sum_of_rewards(self, re_n):
         """
             Monte Carlo estimation of the Q function.
@@ -408,26 +417,18 @@ class Agent(object):
         """
         # YOUR_CODE_HERE
         sum_of_path_lengths = sum([len(re) for re in re_n])
-        q_n = np.zeros(sum_of_path_lengths)
-        counter = 0
+        # TODO: reward function is wrong
+        
         if self.reward_to_go:
-            for re in re_n:
-                start = counter
-                for i, r in enumerate(re[::-1]):
-                    index = start + len(re) - 1 - i
-                    print(index)
-                    if i == 0:
-                        q_n[index] = r
-                    else:
-                        q_n[index] = r +  self.gamma* q_n[index+1]
-                    counter+=1
+            q_n = list(itertools.chain(*[self.discount_and_normalize_rewards(re) for re in re_n]))
         else:
+            counter = 0
+            q_n = np.zeros_like(range(sum_of_path_lengths))
             for re in re_n:
+                cumulative = 0
                 for i, r in enumerate(re):
-                    if i == 0:
-                        q_n[counter] = r
-                    else:
-                        q_n[counter] = self.gamma**(i) * r + q_n[counter-1]
+                    cumulative = cumulative * self.gamma + r
+                    q_n[counter] = cumulative
                     counter+=1
         return q_n
 
@@ -495,10 +496,8 @@ class Agent(object):
         if self.normalize_advantages:
             # On the next line, implement a trick which is known empirically to reduce variance
             # in policy gradient methods: normalize adv_n to have mean zero and std=1.
-            mean = np.mean(adv_n)
-            std = np.std(adv_n)
-            adv_n = (adv_n-mean)/std # YOUR_CODE_HERE
-            print("Advantage", adv_n)
+            # TODO: episode level normalization
+            adv_n = (adv_n - np.mean(adv_n)) / np.std(adv_n)
         return q_n, adv_n
 
     def update_parameters(self, ob_no, ac_na, q_n, adv_n):
@@ -551,11 +550,11 @@ class Agent(object):
         # YOUR_CODE_HERE
         with self.sess.as_default() as session:
             #TODO: HOW TO PRINT OUT LOSSES IN EACH RUN??
-            session.run(self.update_op,
+            loss, _ = session.run([self.loss, self.update_op],
                 feed_dict={self.sy_ob_no: ob_no, self.sy_ac_na: ac_na, self.sy_adv_n: adv_n})
             # session.run(self.update_op,
             #     feed_dict={self.loss: loss_result})
-            # logz.log_tabular("New Loss", loss_result)
+            logz.log_tabular("Loss", loss)
 
 def train_PG(
         exp_name,
