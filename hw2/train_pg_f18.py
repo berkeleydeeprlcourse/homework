@@ -20,7 +20,7 @@ import itertools
 #========================================================================================#
 #                           ----------PROBLEM 2----------
 #========================================================================================#  
-def build_mlp(input_placeholder, output_size, scope, n_layers, size, activation=tf.tanh, output_activation=None):
+def build_mlp(input_placeholder, output_size, scope, n_layers, size, activation=tf.nn.relu, output_activation=None):
     """
         Builds a feedforward neural network
         
@@ -41,9 +41,17 @@ def build_mlp(input_placeholder, output_size, scope, n_layers, size, activation=
     # YOUR CODE HERE
     with tf.variable_scope(scope):
         layer = input_placeholder
-        for i in range(n_layers):
-            layer = tf.layers.dense(layer, size, activation = activation, kernel_initializer = 'glorot_normal', bias_initializer='zeros')
-        output_placeholder = tf.layers.dense(layer, output_size, activation = output_activation)
+        for i in range(1, n_layers):
+            layer = tf.layers.dense(
+                layer,
+                size,
+                activation = activation,
+                use_bias=True,
+                kernel_initializer = tf.contrib.layers.xavier_initializer(),
+                kernel_regularizer=tf.contrib.layers.l2_regularizer(1E-4),
+                name='layer{}'.format(i+1),
+                bias_initializer='zeros')
+        output_placeholder = tf.layers.dense(layer, output_size, activation = output_activation, name='output')
     return output_placeholder
 
 def pathlength(path):
@@ -178,13 +186,16 @@ class Agent(object):
                  This reduces the problem to just sampling z. (Hint: use tf.random_normal!)
         """
         if self.discrete:
-            sy_logits_na = tf.nn.softmax(policy_parameters)
+            sy_logits_na = policy_parameters
             # YOUR_CODE_HERE
             # gumbel trick: argmax(log(x) + log(log(1/U))), U = random uniform distributioon in the size of logits
-            # to replace np.choice(sy_ogits_na)
+            # to replace np.choice(sy_logits_na)
             # from openAI impl
-            uniform_noise = tf.random_uniform(tf.shape(sy_logits_na))
-            sy_sampled_ac = tf.argmax(sy_logits_na - tf.log(-tf.log(uniform_noise)), 1)
+            distribution = tf.nn.softmax(sy_logits_na)
+            uniform_noise = tf.random_uniform(tf.shape(distribution))
+            sy_sampled_ac = tf.argmax(distribution - tf.log(-tf.log(uniform_noise)), 1)
+            # sy_sampled_ac = tf.multinomial(sy_logits_na, 1)
+            # sy_sampled_ac = tf.reshape(sy_sampled_ac, [-1])
         else:
             sy_mean, sy_logstd = policy_parameters
             # YOUR_CODE_HERE
@@ -220,19 +231,21 @@ class Agent(object):
         """
         if self.discrete:
             # YOUR_CODE_HERE
-            row_indices = tf.range(tf.size(sy_ac_na))
-            action_indices = tf.stack([row_indices, sy_ac_na], axis = 1)
-            logits = tf.gather_nd(policy_parameters, action_indices)
-            sy_logprob_n = tf.nn.softmax_cross_entropy_with_logits_v2(labels=sy_ac_na, logits=logits)
+            with tf.name_scope("discrete_actions"):
+                row_indices = tf.range(tf.size(sy_ac_na))
+                action_indices = tf.stack([row_indices, sy_ac_na], axis = 1)
+                logits = tf.gather_nd(policy_parameters, action_indices)
+                sy_logprob_n = tf.nn.softmax_cross_entropy_with_logits_v2(labels=sy_ac_na, logits=logits)
         else:
-            sy_mean, sy_logstd = policy_parameters
-            # YOUR_CODE_HERE
-            # http://cs229.stanford.edu/section/gaussians.pdf
-            std = tf.exp(sy_logstd)
+            with tf.name_scope("cont_actions"):
+                sy_mean, sy_logstd = policy_parameters
+                # YOUR_CODE_HERE
+                # http://cs229.stanford.edu/section/gaussians.pdf
+                std = tf.exp(sy_logstd)
 
-            # TODO: condense the following crap
-            sy_logprob_n = tf.log(1/(np.sqrt(2*np.pi) * std) *
-             tf.exp(-1/(2*std*std)*(sy_ac_na-sy_mean)))
+                # TODO: condense the following crap
+                sy_logprob_n = tf.log(1/(np.sqrt(2*np.pi) * std) *
+                 tf.exp(-1/(2*std*std)*(sy_ac_na-sy_mean)))
         return sy_logprob_n
 
     def build_computation_graph(self):
@@ -274,8 +287,11 @@ class Agent(object):
         # Loss Function and Training Operation
         #========================================================================================#
         # YOUR CODE HERE
-        self.loss = tf.reduce_mean(self.sy_logprob_n * self.sy_adv_n)
-        self.update_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
+        with tf.name_scope("loss"):
+            self.loss = -tf.reduce_mean(self.sy_logprob_n * self.sy_adv_n)
+        # cut off learning rate based on iteration
+        with tf.name_scope("train"):
+            self.update_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
 
         #========================================================================================#
         #                           ----------PROBLEM 6----------
@@ -341,13 +357,17 @@ class Agent(object):
     #====================================================================================#
     #                           ----------PROBLEM 3----------
     #====================================================================================#
-    def discount_and_normalize_rewards(self, episode_rewards):
-        discounted_episode_rewards = np.zeros(len(episode_rewards))
+    def discount_and_normalize_rewards(self, episode_rewards, gamma, reward_to_go):
+        lim = len(episode_rewards)
+        discounted_episode_rewards = np.zeros(lim)
         cumulative = 0.0
         for i in reversed(range(len(episode_rewards))):
-            cumulative = cumulative * self.gamma + episode_rewards[i]
+            cumulative = cumulative * gamma + episode_rewards[i]
             discounted_episode_rewards[i] = cumulative
-        return discounted_episode_rewards
+        if reward_to_go:
+            return discounted_episode_rewards
+        else:
+            return discounted_episode_rewards[0] * lim
 
     def sum_of_rewards(self, re_n):
         """
@@ -420,17 +440,10 @@ class Agent(object):
         # TODO: reward function is wrong
         
         if self.reward_to_go:
-            q_n = list(itertools.chain(*[self.discount_and_normalize_rewards(re) for re in re_n]))
+            return list(itertools.chain(*[self.discount_and_normalize_rewards(re, self.gamma, self.reward_to_go) for re in re_n]))
         else:
-            counter = 0
-            q_n = np.zeros_like(range(sum_of_path_lengths))
-            for re in re_n:
-                cumulative = 0
-                for i, r in enumerate(re):
-                    cumulative = cumulative * self.gamma + r
-                    q_n[counter] = cumulative
-                    counter+=1
-        return q_n
+            # total return of rewards
+            return [self.discount_and_normalize_rewards(re, self.gamma, self.reward_to_go) for re in re_n]
 
     def compute_advantage(self, ob_no, q_n):
         """
@@ -556,7 +569,8 @@ class Agent(object):
             #     feed_dict={self.loss: loss_result})
             logz.log_tabular("Loss", loss)
 
-def train_PG(
+# For easier test
+def createEnvAndAgent(
         exp_name,
         env_name,
         n_iter, 
@@ -566,24 +580,11 @@ def train_PG(
         learning_rate, 
         reward_to_go, 
         animate, 
-        logdir, 
         normalize_advantages,
         nn_baseline, 
         seed,
         n_layers,
         size):
-
-    start = time.time()
-
-    #========================================================================================#
-    # Set Up Logger
-    #========================================================================================#
-    setup_logger(logdir, locals())
-
-    #========================================================================================#
-    # Set Up Env
-    #========================================================================================#
-
     # Make the gym environment
     env = gym.make(env_name)
 
@@ -627,7 +628,50 @@ def train_PG(
         'normalize_advantages': normalize_advantages,
     }
 
-    agent = Agent(computation_graph_args, sample_trajectory_args, estimate_return_args)
+    return (env, Agent(computation_graph_args, sample_trajectory_args, estimate_return_args))
+
+def train_PG(
+        exp_name,
+        env_name,
+        n_iter, 
+        gamma, 
+        min_timesteps_per_batch, 
+        max_path_length,
+        learning_rate, 
+        reward_to_go, 
+        animate, 
+        logdir, 
+        normalize_advantages,
+        nn_baseline, 
+        seed,
+        n_layers,
+        size):
+
+    start = time.time()
+
+    #========================================================================================#
+    # Set Up Logger
+    #========================================================================================#
+    setup_logger(logdir, locals())
+
+    # #========================================================================================#
+    # # Initialize Agent And Env
+    # #======================================================================================
+    env, agent = createEnvAndAgent(
+        exp_name,
+        env_name,
+        n_iter, 
+        gamma, 
+        min_timesteps_per_batch, 
+        max_path_length,
+        learning_rate, 
+        reward_to_go, 
+        animate, 
+        normalize_advantages,
+        nn_baseline, 
+        seed,
+        n_layers,
+        size)
 
     # build computation graph
     agent.build_computation_graph()
