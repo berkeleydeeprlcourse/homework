@@ -51,7 +51,8 @@ def build_mlp(input_placeholder, output_size, scope, n_layers, size, activation=
                 kernel_regularizer=tf.contrib.layers.l2_regularizer(1E-4),
                 name='layer{}'.format(i+1),
                 bias_initializer='zeros')
-        output_placeholder = tf.layers.dense(layer, output_size, activation = output_activation, name='output')
+        output_placeholder = tf.layers.dense(layer, output_size, activation = output_activation,
+              kernel_initializer=tf.contrib.layers.xavier_initializer(),name='output')
     return output_placeholder
 
 def pathlength(path):
@@ -194,8 +195,6 @@ class Agent(object):
             distribution = tf.nn.softmax(sy_logits_na)
             uniform_noise = tf.random_uniform(tf.shape(distribution))
             sy_sampled_ac = tf.argmax(distribution - tf.log(-tf.log(uniform_noise)), 1)
-            # sy_sampled_ac = tf.multinomial(sy_logits_na, 1)
-            # sy_sampled_ac = tf.reshape(sy_sampled_ac, [-1])
         else:
             sy_mean, sy_logstd = policy_parameters
             # YOUR_CODE_HERE
@@ -232,10 +231,8 @@ class Agent(object):
         if self.discrete:
             # YOUR_CODE_HERE
             with tf.name_scope("discrete_actions"):
-                row_indices = tf.range(tf.size(sy_ac_na))
-                action_indices = tf.stack([row_indices, sy_ac_na], axis = 1)
-                logits = tf.gather_nd(policy_parameters, action_indices)
-                sy_logprob_n = tf.nn.softmax_cross_entropy_with_logits_v2(labels=sy_ac_na, logits=logits)
+                # Note: sparse_softmax_cross_entropy_with_logits doesn't need to convert actions to one-hot vncoding
+                sy_logprob_n = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=sy_ac_na, logits=policy_parameters)
         else:
             with tf.name_scope("cont_actions"):
                 sy_mean, sy_logstd = policy_parameters
@@ -288,7 +285,7 @@ class Agent(object):
         #========================================================================================#
         # YOUR CODE HERE
         with tf.name_scope("loss"):
-            self.loss = -tf.reduce_mean(self.sy_logprob_n * self.sy_adv_n)
+            self.loss = tf.reduce_mean(self.sy_logprob_n * tf.stack(self.sy_adv_n))
         # cut off learning rate based on iteration
         with tf.name_scope("train"):
             self.update_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
@@ -359,7 +356,7 @@ class Agent(object):
     #====================================================================================#
     def discount_and_normalize_rewards(self, episode_rewards, gamma, reward_to_go):
         lim = len(episode_rewards)
-        discounted_episode_rewards = np.zeros(lim)
+        discounted_episode_rewards = [0]*lim
         cumulative = 0.0
         for i in reversed(range(len(episode_rewards))):
             cumulative = cumulative * gamma + episode_rewards[i]
@@ -367,7 +364,7 @@ class Agent(object):
         if reward_to_go:
             return discounted_episode_rewards
         else:
-            return discounted_episode_rewards[0] * lim
+            return [discounted_episode_rewards[0]] * lim
 
     def sum_of_rewards(self, re_n):
         """
@@ -436,14 +433,8 @@ class Agent(object):
             like the 'ob_no' and 'ac_na' above. 
         """
         # YOUR_CODE_HERE
-        sum_of_path_lengths = sum([len(re) for re in re_n])
-        # TODO: reward function is wrong
-        
-        if self.reward_to_go:
-            return list(itertools.chain(*[self.discount_and_normalize_rewards(re, self.gamma, self.reward_to_go) for re in re_n]))
-        else:
-            # total return of rewards
-            return [self.discount_and_normalize_rewards(re, self.gamma, self.reward_to_go) for re in re_n]
+        output = list(itertools.chain(*[self.discount_and_normalize_rewards(re, self.gamma, self.reward_to_go) for re in re_n]))
+        return output
 
     def compute_advantage(self, ob_no, q_n):
         """
@@ -562,11 +553,8 @@ class Agent(object):
 
         # YOUR_CODE_HERE
         with self.sess.as_default() as session:
-            #TODO: HOW TO PRINT OUT LOSSES IN EACH RUN??
             loss, _ = session.run([self.loss, self.update_op],
                 feed_dict={self.sy_ob_no: ob_no, self.sy_ac_na: ac_na, self.sy_adv_n: adv_n})
-            # session.run(self.update_op,
-            #     feed_dict={self.loss: loss_result})
             logz.log_tabular("Loss", loss)
 
 # For easier test
