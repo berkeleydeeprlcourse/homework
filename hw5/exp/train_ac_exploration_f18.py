@@ -528,7 +528,7 @@ def train_AC(
                     the call to exploration.fit_density_model should return nothing
             2. Modify the re_n with the reward bonus by calling exploration.modify_reward
         """
-        old_re_n = re_n
+        old_re_n = re_n[:]
         if dm == 'none':
             pass
         else:
@@ -578,9 +578,9 @@ def train_AC(
         logz.log_tabular("EpLenStd", np.std(ep_lengths))
         ########################################################################
         logz.log_tabular("Unmodified Rewards Mean", np.mean(old_re_n))
-        logz.log_tabular("Unmodified Rewards Std", np.mean(old_re_n))
+        logz.log_tabular("Unmodified Rewards Std", np.std(old_re_n))
         logz.log_tabular("Modified Rewards Mean", np.mean(re_n))
-        logz.log_tabular("Modified Rewards Std", np.mean(re_n))
+        logz.log_tabular("Modified Rewards Std", np.std(re_n))
         if dm == 'ex2':
             logz.log_tabular("Log Likelihood Mean", np.mean(ll))
             logz.log_tabular("Log Likelihood Std", np.std(ll))
