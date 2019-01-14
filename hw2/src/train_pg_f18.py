@@ -53,7 +53,7 @@ def build_mlp(input_placeholder, output_size, scope, n_layers, size, activation=
                 # bias_initializer=bias_initializer
                 )
         output_placeholder = tf.layers.dense(layer, output_size,\
-            kernel_initializer = tf.random_uniform_initializer(minval=-1, maxval=1),
+            # kernel_initializer = tf.random_uniform_initializer(minval=-1, maxval=1),
             activation = output_activation,
             name='output')
     return output_placeholder
@@ -151,14 +151,15 @@ class Agent(object):
                 Pass in self.n_layers for the 'n_layers' argument, and
                 pass in self.size for the 'size' argument.
         """
+        scope = "policy"
         if self.discrete:
             # YOUR_CODE_HERE
-            sy_logits_na = build_mlp(sy_ob_no, self.ac_dim, "discrete", self.n_layers, self.size)
+            sy_logits_na = build_mlp(sy_ob_no, self.ac_dim, "policy", self.n_layers, self.size)
             return sy_logits_na
         else:
             # YOUR_CODE_HERE
-            sy_mean = build_mlp(sy_ob_no, self.ac_dim, "continuous", self.n_layers, self.size)
-            with tf.variable_scope("continuous"):
+            sy_mean = build_mlp(sy_ob_no, self.ac_dim, "policy", self.n_layers, self.size)
+            with tf.variable_scope(scope):
                 sy_logstd = tf.get_variable("log_std", shape = [self.ac_dim])
             return (sy_mean, sy_logstd)
 
@@ -241,14 +242,8 @@ class Agent(object):
             # http://cs229.stanford.edu/section/gaussians.pdf
             # https://github.com/openai/baselines/blob/556b19845427766657c3468d01b54fae48fdcf5e/baselines/common/distributions.py#L237
             std = tf.exp(sy_logstd)
-            # shape = tf.to_float(tf.shape(sy_ac_na)[-1])
-            # # negative log prob: log(1/(sig * sqrt(2*PI**(n/2))) * exp(-1/(2*sig^2)*(x-mean)^2)))
-            # include action space?
-            # sy_logprob_n = 0.5 * tf.reduce_sum(tf.square((sy_ac_na-sy_mean)/std), axis=-1) \
-            #     +  0.5 * np.log(2*np.pi) * shape \
-            #     + tf.reduce_sum(sy_logstd, axis = -1∂)
-            sy_logprob_n = tf.contrib.distributions.MultivariateNormalDiag(
-                loc=sy_mean, scale_diag=std).log_prob(sy_ac_na)
+            C = np.log(np.pi * 2)
+            sy_logprob_n = tf.reduce_sum(-0.5 * (tf.square((sy_ac_na-sy_mean)/std) + 2 * sy_logstd + C), axis = 1)
         return sy_logprob_n
 
     def build_computation_graph(self):
@@ -507,8 +502,6 @@ class Agent(object):
         if self.normalize_advantages:
             # On the next line, implement a trick which is known empirically to reduce variance
             # in policy gradient methods: normalize adv_n to have mean zero and std=1.
-            # TODO: episode level normalization
-
             adv_n = (adv_n - np.mean(adv_n)) / max(np.std(adv_n), self.constant)
         return q_n, adv_n
 
@@ -546,9 +539,9 @@ class Agent(object):
 
             # YOUR_CODE_HERE
             target_n = (q_n - np.mean(q_n))/max(np.std(q_n), self.constant)
-            loss, _ = self.sess.run([self.baseline_loss, self.baseline_update_op],
+            baseline_loss, _ = self.sess.run([self.baseline_loss, self.baseline_update_op],
                 feed_dict = {self.sy_target_n: target_n, self.sy_ob_no: ob_no})
-            logz.log_tabular("baseline Loss", loss)
+            logz.log_tabular("baseline Loss", baseline_loss)
         #====================================================================================#
         #                           ----------PROBLEM 3----------
         # Performing the Policy Update

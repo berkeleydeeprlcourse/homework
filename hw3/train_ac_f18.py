@@ -44,13 +44,10 @@ def build_mlp(input_placeholder, output_size, scope, n_layers, size, activation=
                 size,
                 activation = activation,
                 use_bias=True,
-                kernel_initializer = tf.contrib.layers.xavier_initializer(),
-                # kernel_regularizer=tf.contrib.layers.l2_regularizer(1E-4),
                 name='layer{}'.format(i+1),
                 bias_initializer='zeros')
         output_placeholder = tf.layers.dense(layer, output_size, activation = output_activation,
-              kernel_initializer=tf.contrib.layers.xavier_initializer(),name='output')
-    return output_placeholder
+            name='output')
     return output_placeholder
 
 def pathlength(path):
@@ -148,7 +145,8 @@ class Agent(object):
             # YOUR_CODE_HERE
             sy_mean = build_mlp(sy_ob_no, self.ac_dim, scope, self.n_layers, self.size)
             with tf.variable_scope(scope):
-                sy_logstd = tf.get_variable("log_std", shape = [self.ac_dim], trainable = True)
+                sy_logstd = tf.get_variable("log_std", shape = [self.ac_dim],
+                    initializer=-0.5*np.ones(act_dim, dtype=np.float32))
             return (sy_mean, sy_logstd)
 
     def sample_action(self, policy_parameters):
@@ -215,13 +213,13 @@ class Agent(object):
         if self.discrete:
             sy_logits_na = policy_parameters
             # YOUR_HW2 CODE_HERE
-            sy_logprob_n = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=sy_ac_na, logits=policy_parameters)
+            sy_logprob_n = -tf.nn.sparse_softmax_cross_entropy_with_logits(labels=sy_ac_na, logits=policy_parameters)
         else:
             sy_mean, sy_logstd = policy_parameters
             # YOUR_HW2 CODE_HERE
             std = tf.exp(sy_logstd)
-            sy_logprob_n = (0.5 * tf.reduce_sum(tf.square((sy_ac_na-sy_mean)/std)) \
-                    + 0.5 * np.log(2*np.pi) + tf.reduce_sum(sy_logstd))
+            C = np.log(np.pi * 2)
+            sy_logprob_n = -tf.reduce_sum(0.5 * (tf.square((sy_ac_na-sy_mean)/std) + 2 * sy_logstd + C))
         return sy_logprob_n
 
     def build_computation_graph(self):
@@ -258,7 +256,7 @@ class Agent(object):
         # This is used in the loss function.
         self.sy_logprob_n = self.get_log_prob(self.policy_parameters, self.sy_ac_na)
 
-        actor_loss = tf.reduce_sum(-self.sy_logprob_n * self.sy_adv_n)
+        actor_loss = -tf.reduce_sum(self.sy_logprob_n * self.sy_adv_n)
         self.actor_update_op = tf.train.AdamOptimizer(self.learning_rate).minimize(actor_loss)
 
         # define the critic
@@ -288,8 +286,6 @@ class Agent(object):
     def sample_trajectory(self, env, animate_this_episode):
         ob = env.reset()
         obs, acs, rewards, next_obs, terminals = [], [], [], [], []
-        low = env.action_space.low
-        high = env.action_space.high
         steps = 0
         while True:
             if animate_this_episode:
@@ -297,9 +293,9 @@ class Agent(object):
                 time.sleep(0.1)
             obs.append(ob)
             ac = None # YOUR HW2 CODE HERE
-            with self.sess.as_default() as session:
-                ac = session.run(self.sy_sampled_ac, feed_dict={self.sy_ob_no: [ob]})
-                ac = np.clip(ac, low, high)
+            ac = self.sess.run(self.sy_sampled_ac, feed_dict={self.sy_ob_no: [ob]})
+            if not self.discrete:
+                ac = np.clip(ac, env.action_space.low[0], env.action_space.high[0])
             ac = ac[0]
             acs.append(ac)
             ob, rew, done, _ = env.step(ac)
@@ -349,12 +345,19 @@ class Agent(object):
         # Note: don't forget to use terminal_n to cut off the V(s') term when computing Q(s, a)
         # otherwise the values will grow without bound.
         # YOUR CODE HERE
-        raise NotImplementedError
-        adv_n = None
+        next_values  = self.get_next_values(next_ob_no, terminal_n)
+        # terminal_n is used for cutting off next  values
+        q = re_n + self.gamma * next_values
+        cur_values  = self.sess.run(self.critic_prediction, feed_dict={self.sy_ob_no: ob_no})
+        adv_n = q - cur_values
 
         if self.normalize_advantages:
             adv_n = (adv_n - np.mean(adv_n)) / np.std(adv_n)
         return adv_n
+
+    def get_next_values(self, next_ob_no, terminal_n):
+        next_values  = self.sess.run(self.critic_prediction, feed_dict={self.sy_ob_no: next_ob_no})
+        return terminal_n * next_values
 
     def update_critic(self, ob_no, next_ob_no, re_n, terminal_n):
         """
@@ -383,7 +386,13 @@ class Agent(object):
         # Note: don't forget to use terminal_n to cut off the V(s') term when computing the target
         # otherwise the values will grow without bound.
         # YOUR CODE HERE
-        raise NotImplementedError
+        next_ob_splits = np.split(next_ob_no, self.num_grad_steps_per_target_update, 0)
+        ob_no_splits = np.split(ob_no, self.num_grad_steps_per_target_update, 0)
+        terminal_n_splits = np.split(terminal_n, self.num_grad_steps_per_target_update, 0)
+        for i in range(self.num_target_updates):
+            next_values = self.get_next_values(next_ob_splits[i], terminal_n_splits[i])
+            target = re_n + self.gamma * next_values
+            self.sess.run(self.critic_update_op, feed_dict={self.sy_ob_no: ob_no, self.sy_target_n: target})
 
     def update_actor(self, ob_no, ac_na, adv_n):
         """ 
