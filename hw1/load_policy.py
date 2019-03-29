@@ -1,4 +1,10 @@
-import pickle, tensorflow as tf, tf_util, numpy as np
+import pickle
+
+import numpy as np
+import tensorflow as tf
+
+import tf_util
+
 
 def load_policy(filename):
     with open(filename, 'rb') as f:
@@ -23,7 +29,7 @@ def load_policy(filename):
 
         def apply_nonlin(x):
             if nonlin_type == 'lrelu':
-                return tf_util.lrelu(x, leak=.01) # openai/imitation nn.py:233
+                return tf_util.lrelu(x, leak=.01)  # openai/imitation nn.py:233
             elif nonlin_type == 'tanh':
                 return tf.tanh(x)
             else:
@@ -35,7 +41,8 @@ def load_policy(filename):
         obsnorm_meansq = policy_params['obsnorm']['Standardizer']['meansq_1_D']
         obsnorm_stdev = np.sqrt(np.maximum(0, obsnorm_meansq - np.square(obsnorm_mean)))
         print('obs', obsnorm_mean.shape, obsnorm_stdev.shape)
-        normedobs_bo = (obs_bo - obsnorm_mean) / (obsnorm_stdev + 1e-6) # 1e-6 constant from Standardizer class in nn.py:409 in openai/imitation
+        # 1e-6 constant from Standardizer class in nn.py:409 in openai/imitation
+        normedobs_bo = (obs_bo - obsnorm_mean) / (obsnorm_stdev + 1e-6)
 
         curr_activations_bd = normedobs_bo
 
