@@ -40,9 +40,11 @@ def plot_history(hist, plots_dir):
     # save plots
     plot_metric('mean_absolute_error', hist)
     plt.savefig(os.path.join(plots_dir, '{}.png'.format('mean_absolute_error')))
+    plt.close('all')
 
     plot_metric('mean_squared_error', hist)
     plt.savefig(os.path.join(plots_dir, '{}.png'.format('mean_squared_error')))
+    plt.close('all')
 
 
 def plot_predictions(test_labels, test_predictions, plots_dir):
@@ -55,6 +57,7 @@ def plot_predictions(test_labels, test_predictions, plots_dir):
     plt.axis('square')
     plt.plot([-10, 10], [-10, 10])
     plt.savefig(os.path.join(plots_dir, '{}.png'.format('preds_scatter')))
+    plt.close('all')
 
     # create figure for error distribution plot
     plt.figure()
@@ -63,6 +66,7 @@ def plot_predictions(test_labels, test_predictions, plots_dir):
     plt.xlabel('Prediction Error')
     plt.ylabel('Count')
     plt.savefig(os.path.join(plots_dir, '{}.png'.format('preds_err')))
+    plt.close('all')
 
 
 def norm(dataset, norm_params):
@@ -107,18 +111,11 @@ def load(checkpoint_path, norm_params_path):
     return model, norm_params
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--data-dir', type=str, required=True, help='Path to expert policy pickle')
-    parser.add_argument('--epochs', type=int, required=False, help='Number of epochs', default=1000)
-    parser.add_argument('--output', type=str, required=True, help='output dir name')
-    parser.add_argument('--checkpoint-name', type=str, required=False, help='checkpoint file name')
-    parser.add_argument('--test-size', type=float, required=False, default=0.05, help='test dataset')
-    args = parser.parse_args()
-
+def train(args):
     # read dataset from disk
     with open(args.data_dir, 'rb') as fp:
         expert_data = pickle.load(fp)
+    print('successfully loaded dataset {}'.format(args.data_dir))
 
     assert 'observations' in expert_data, 'expert data missing observations'
     assert 'actions' in expert_data, 'expert data missing actions'
@@ -146,8 +143,12 @@ def main():
     dataset.drop(to_remove, inplace=True, axis=1)
     feature_names = [x for x in feature_names if x not in to_remove]
 
+    print('dataset info after cleanup: ')
+    print(dataset.head())
+    print(dataset.describe().transpose())
+
     # split data into train and test
-    train_dataset = dataset.sample(frac=1-args.test_size)
+    train_dataset = dataset.sample(frac=1 - args.test_size)
     test_dataset = dataset.drop(train_dataset.index)
 
     # splitting labels from features
@@ -208,6 +209,19 @@ def main():
     with open(norm_params, 'wb') as f:
         pickle.dump(model_params, f, pickle.HIGHEST_PROTOCOL)
     print('normalization parameters saved at {}'.format(norm_params))
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--data-dir', type=str, required=True, help='Path to expert policy pickle')
+    parser.add_argument('--epochs', type=int, required=False, help='Number of epochs', default=1000)
+    parser.add_argument('--output', type=str, required=True, help='output dir name')
+    parser.add_argument('--checkpoint-name', type=str, required=False, help='checkpoint file name')
+    parser.add_argument('--test-size', type=float, required=False,
+                        default=0.05, help='test dataset')
+    args = parser.parse_args()
+
+    train(args)
 
 
 if __name__ == '__main__':
