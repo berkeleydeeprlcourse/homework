@@ -73,8 +73,9 @@ def tf_training(actions,observations,n_steps,sess,input_ph, output_ph, output_pr
         # print the mse every so often
         if training_step % 10 == 0:
             print('{0:04d} mse: {1:.3f}'.format(training_step, mse_run))
-            saver.save(sess, '/tmp/model.ckpt')
-    
+            save_path = saver.save(sess, '/tmp/model.ckpt')
+            
+    print("Model saved in path: %s" % save_path)
     summary_writer = tf.summary.FileWriter("/tmp/logs", sess.graph)
     summary_writer.close()
 
@@ -96,10 +97,11 @@ n_observation = observations.shape[1]
 input_ph, output_ph, output_pred = create_model(n_observation,n_action)
 
 if Train_Restore ==0:    
-    tf_training(actions,observations,21,sess,input_ph, output_ph, output_pred)
+    tf_training(actions,observations,800,sess,input_ph, output_ph, output_pred)
 elif Train_Restore == 1:
     saver = tf.train.Saver()
     saver.restore(sess, "/tmp/model.ckpt")
+    saver.save(sess,'trainingresults/model.ckpt')
 
 env = gym.make(envname)
 max_steps = env.spec.timestep_limit
@@ -128,7 +130,6 @@ print(totalr)
 env.render()
 env.close()
 
-#close()
 #prediction = sess.run(output_pred, feed_dict={input_ph: np.array([[1.2494,\
 #    -0.00354982,-0.00284883,0.00154274,0.00223747,0.0376482,-0.112478,0.0892891,0.0436803,0.0247838,1.44408]])})
 #print(prediction)
