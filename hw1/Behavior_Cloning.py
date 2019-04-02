@@ -11,8 +11,6 @@ import pickle
 import tensorflow as tf
 import numpy as np
 import gym
-#import glfw
-from types import MethodType
 
 def tf_reset():
     try: 
@@ -21,24 +19,6 @@ def tf_reset():
         pass
     tf.reset_default_graph()
     return tf.Session()
-
-def env_wrapper(env):
-    def close(self):
-        if self.viewer is not None:
-            glfw.terminate()
-            self.viewer = None
-
-    env.unwrapped.close = MethodType(close, env.unwrapped)
-    return env
-
-
-def close():
-    env = env_wrapper(gym.make("Reacher-v2"))
-    env.reset()
-    for _ in range(50):
-        env.render()
-        env.step([0, 0])
-    env.close()
 
 def create_model(n_observation,n_action):
     # create inputs
@@ -145,8 +125,10 @@ while not done:
     if steps >= max_steps:
         break
 print(totalr)
+env.render()
+env.close()
 
-close()
+#close()
 #prediction = sess.run(output_pred, feed_dict={input_ph: np.array([[1.2494,\
 #    -0.00354982,-0.00284883,0.00154274,0.00223747,0.0376482,-0.112478,0.0892891,0.0436803,0.0247838,1.44408]])})
 #print(prediction)
