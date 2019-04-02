@@ -73,7 +73,7 @@ def tf_training(actions,observations,n_steps,sess,input_ph, output_ph, output_pr
         # print the mse every so often
         if training_step % 10 == 0:
             print('{0:04d} mse: {1:.3f}'.format(training_step, mse_run))
-            save_path = saver.save(sess, 'trainingresults/model.ckpt')
+            save_path = saver.save(sess, 'trainingresults/ant.ckpt')
             
     print("Model saved in path: %s" % save_path)
     summary_writer = tf.summary.FileWriter("/tmp/logs", sess.graph)
@@ -81,8 +81,8 @@ def tf_training(actions,observations,n_steps,sess,input_ph, output_ph, output_pr
 
     
 #def main(envname,Train_Restore):
-envname = "Hopper-v2"
-Train_Restore = 1
+envname = "Ant-v2"
+Train_Restore = 0
 
 with open(os.path.join('expert_data', envname + '.pkl'), 'rb') as f:
     data_from_expert = pickle.load(f)
@@ -100,7 +100,7 @@ if Train_Restore ==0:
     tf_training(actions_expert,observations_expert,800,sess,input_ph, output_ph, output_pred)
 elif Train_Restore == 1:
     saver = tf.train.Saver()
-    saver.restore(sess, "trainingresults/model.ckpt")
+    saver.restore(sess, "trainingresults/ant.ckpt")
 
 env = gym.make(envname)
 max_steps = env.spec.timestep_limit
