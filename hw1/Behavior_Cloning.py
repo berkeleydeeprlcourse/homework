@@ -11,6 +11,7 @@ import pickle
 import tensorflow as tf
 import numpy as np
 import gym
+from sklearn.model_selection import train_test_split
 
 def tf_reset():
     try: 
@@ -25,14 +26,14 @@ def create_model(n_observation,n_action,regularization):
     input_ph = tf.placeholder(dtype=tf.float32, shape=[None, n_observation])
     output_ph = tf.placeholder(dtype=tf.float32, shape=[None, n_action])
     # create variables
-    W0 = tf.get_variable(name='W0', shape=[n_observation, 64], initializer=tf.contrib.layers.xavier_initializer())
+    W0 = tf.get_variable(name='W0', shape=[n_observation, 128], initializer=tf.contrib.layers.xavier_initializer())
     wd = tf.nn.l2_loss(W0)*regularization
     tf.add_to_collection("weight_decay",wd)
-    W1 = tf.get_variable(name='W1', shape=[64, n_action], initializer=tf.contrib.layers.xavier_initializer())
+    W1 = tf.get_variable(name='W1', shape=[128, n_action], initializer=tf.contrib.layers.xavier_initializer())
     wd = tf.nn.l2_loss(W1)*regularization
     tf.add_to_collection("weight_decay",wd)    
     
-    b0 = tf.get_variable(name='b0', shape=[64], initializer=tf.constant_initializer(0.))
+    b0 = tf.get_variable(name='b0', shape=[128], initializer=tf.constant_initializer(0.))
     b1 = tf.get_variable(name='b1', shape=[n_action], initializer=tf.constant_initializer(0.))
     
     weights = [W0, W1]
@@ -64,18 +65,17 @@ def tf_training(actions,observations,n_steps,sess,input_ph, output_ph, output_pr
     # create saver to save model variables
     saver = tf.train.Saver()
     
+    # split the data into training and validation sets
+    X_train,X_val,y_train,y_val = train_test_split(observations,actions,test_size = 0.3,random_state=42)
+    
     # run training
-    for training_step in range(n_steps):
-        # get a random subset of the training data
-        input_batch = observations
-        output_batch = actions
-        
+    for training_step in range(n_steps):        
         # run the optimizer and get the mse
-        _, mse_run = sess.run([opt, total_loss], feed_dict={input_ph: input_batch, output_ph: output_batch})
-        
+        _, mse_train = sess.run([opt, mse], feed_dict={input_ph: X_train, output_ph: y_train})
+        mse_val = sess.run(mse, feed_dict={input_ph: X_val, output_ph: y_val})
         # print the mse every so often
         if training_step % 10 == 0:
-            print('{0:04d} mse: {1:.3f}'.format(training_step, mse_run))
+            print('{0:04d} (train, validation) mse: ({1:.5f}, {2:.5f}) '.format(training_step, mse_train, mse_val))
             save_path = saver.save(sess, 'trainingresults/hopper.ckpt')
             
     print("Model saved in path: %s" % save_path)
@@ -92,14 +92,19 @@ with open(os.path.join('expert_data', envname + '.pkl'), 'rb') as f:
 
 actions_expert = data_from_expert['actions']
 observations_expert = np.float32(data_from_expert['observations'])
+
+# Normalize the input and output
 actions_expert_processed = np.divide((actions_expert-np.mean(actions_expert,0)),np.std(actions_expert,0))
 observations_expert_processed = np.divide((observations_expert-np.mean(observations_expert,0)),np.std(observations_expert,0))
 
-sess = tf_reset() 
+# Get the size of the problem
 n_action = actions_expert.shape[1]
 n_observation = observations_expert.shape[1]
 
-input_ph, output_ph, output_pred = create_model(n_observation,n_action,0.001)
+sess = tf_reset() 
+
+
+input_ph, output_ph, output_pred = create_model(n_observation,n_action,0.01)
 
 if Train_Restore ==0:    
     tf_training(actions_expert_processed,observations_expert_processed,2000,sess,input_ph, output_ph, output_pred)
