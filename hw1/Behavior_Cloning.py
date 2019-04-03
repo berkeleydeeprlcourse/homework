@@ -20,22 +20,24 @@ def tf_reset():
     tf.reset_default_graph()
     return tf.Session()
 
-def create_model(n_observation,n_action):
+def create_model(n_observation,n_action,regularization):
     # create inputs
     input_ph = tf.placeholder(dtype=tf.float32, shape=[None, n_observation])
     output_ph = tf.placeholder(dtype=tf.float32, shape=[None, 1, n_action])
     # create variables
-    W0 = tf.get_variable(name='W0', shape=[n_observation, 20], initializer=tf.contrib.layers.xavier_initializer())
-    W1 = tf.get_variable(name='W1', shape=[20, 20], initializer=tf.contrib.layers.xavier_initializer())
-    W2 = tf.get_variable(name='W2', shape=[20, n_action], initializer=tf.contrib.layers.xavier_initializer())
+    W0 = tf.get_variable(name='W0', shape=[n_observation, 120], initializer=tf.contrib.layers.xavier_initializer())
+    wd = tf.nn.l2_loss(W0)*regularization
+    tf.add_to_collection("weight_decay",wd)
+    W1 = tf.get_variable(name='W1', shape=[120, n_action], initializer=tf.contrib.layers.xavier_initializer())
+    wd = tf.nn.l2_loss(W1)*regularization
+    tf.add_to_collection("weight_decay",wd)    
     
-    b0 = tf.get_variable(name='b0', shape=[20], initializer=tf.constant_initializer(0.))
-    b1 = tf.get_variable(name='b1', shape=[20], initializer=tf.constant_initializer(0.))
-    b2 = tf.get_variable(name='b2', shape=[n_action], initializer=tf.constant_initializer(0.))
+    b0 = tf.get_variable(name='b0', shape=[120], initializer=tf.constant_initializer(0.))
+    b1 = tf.get_variable(name='b1', shape=[n_action], initializer=tf.constant_initializer(0.))
     
-    weights = [W0, W1, W2]
-    biases = [b0, b1, b2]
-    activations = [tf.nn.relu, tf.nn.relu, None]
+    weights = [W0, W1]
+    biases = [b0, b1]
+    activations = [tf.nn.relu, None]
     
     # create computation graph
     layer = input_ph
@@ -52,9 +54,10 @@ def tf_training(actions,observations,n_steps,sess,input_ph, output_ph, output_pr
 #    sess = tf.Session()
     # create loss
     mse = tf.reduce_mean(0.5 * tf.square(output_pred - output_ph))
-    
+    weight_decay_loss = tf.get_collection("weght_decay")
+    total_loss = mse+weight_decay_loss
     # create optimizer
-    opt = tf.train.AdamOptimizer().minimize(mse)
+    opt = tf.train.AdamOptimizer().minimize(total_loss)
     
     # initialize variables
     sess.run(tf.global_variables_initializer())
@@ -68,7 +71,7 @@ def tf_training(actions,observations,n_steps,sess,input_ph, output_ph, output_pr
         output_batch = actions
         
         # run the optimizer and get the mse
-        _, mse_run = sess.run([opt, mse], feed_dict={input_ph: input_batch, output_ph: output_batch})
+        _, mse_run = sess.run([opt, total_loss], feed_dict={input_ph: input_batch, output_ph: output_batch})
         
         # print the mse every so often
         if training_step % 10 == 0:
@@ -81,7 +84,7 @@ def tf_training(actions,observations,n_steps,sess,input_ph, output_ph, output_pr
 
     
 #def main(envname,Train_Restore):
-envname = "Ant-v2"
+envname = "Hopper-v2"
 Train_Restore = 0
 
 with open(os.path.join('expert_data', envname + '.pkl'), 'rb') as f:
@@ -89,47 +92,49 @@ with open(os.path.join('expert_data', envname + '.pkl'), 'rb') as f:
 
 actions_expert = data_from_expert['actions']
 observations_expert = data_from_expert['observations']
+actions_expert_processed = np.divide((actions_expert-np.mean(actions_expert,0)),np.std(actions_expert,0))
+observations_expert_processed = np.divide((observations_expert-np.mean(observations_expert,0)),np.std(observations_expert,0))
 
 sess = tf_reset() 
 n_action = actions_expert.shape[2]
 n_observation = observations_expert.shape[1]
 
-input_ph, output_ph, output_pred = create_model(n_observation,n_action)
+input_ph, output_ph, output_pred = create_model(n_observation,n_action,0.001)
 
 if Train_Restore ==0:    
-    tf_training(actions_expert,observations_expert,800,sess,input_ph, output_ph, output_pred)
+    tf_training(actions_expert_processed,observations_expert_processed,800,sess,input_ph, output_ph, output_pred)
 elif Train_Restore == 1:
     saver = tf.train.Saver()
-    saver.restore(sess, "trainingresults/ant.ckpt")
+    saver.restore(sess, "trainingresults/hopper.ckpt")
 
-env = gym.make(envname)
-max_steps = env.spec.timestep_limit
-observations = np.zeros(shape=(1,11))
-actions = np.zeros(shape=(1,3))
+#env = gym.make(envname)
+#max_steps = env.spec.timestep_limit
+#observations = np.zeros(shape=(1,11))
+#actions = np.zeros(shape=(1,3))
+#
+#obs = env.reset()
+#obs = np.reshape(obs,(1,11))
+#done = False
+#totalr = 0.
+#steps = 0
+#while not done:
+#    action = sess.run(output_pred, feed_dict={input_ph:obs})
+#    observations = np.append(observations,obs,axis = 0)
+#    actions = np.append(actions,action,axis = 0)
+#    obs, r, done, _ = env.step(action)
+#    obs = np.reshape(obs,(1,11))
+#    totalr += r
+#    steps += 1
+#    env.render()
+#    if steps % 100 == 0: print("%i/%i"%(steps, max_steps))
+#    if steps >= max_steps:
+#        break
+#print(totalr)
+#env.render()
+#env.close()
 
-obs = env.reset()
-obs = np.reshape(obs,(1,11))
-done = False
-totalr = 0.
-steps = 0
-while not done:
-    action = sess.run(output_pred, feed_dict={input_ph:obs})
-    observations = np.append(observations,obs,axis = 0)
-    actions = np.append(actions,action,axis = 0)
-    obs, r, done, _ = env.step(action)
-    obs = np.reshape(obs,(1,11))
-    totalr += r
-    steps += 1
-    env.render()
-    if steps % 100 == 0: print("%i/%i"%(steps, max_steps))
-    if steps >= max_steps:
-        break
-print(totalr)
-env.render()
-env.close()
-
-#prediction = sess.run(output_pred, feed_dict={input_ph: np.array([[1.2494,\
-#    -0.00354982,-0.00284883,0.00154274,0.00223747,0.0376482,-0.112478,0.0892891,0.0436803,0.0247838,1.44408]])})
-#print(prediction)
+prediction = sess.run(output_pred, feed_dict={input_ph: np.array([[1.2494,\
+    -0.00354982,-0.00284883,0.00154274,0.00223747,0.0376482,-0.112478,0.0892891,0.0436803,0.0247838,1.44408]])})
+print(prediction)
 
 #main('Hopper-v2',0)
