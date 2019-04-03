@@ -26,19 +26,23 @@ def create_model(n_observation,n_action,regularization):
     input_ph = tf.placeholder(dtype=tf.float32, shape=[None, n_observation])
     output_ph = tf.placeholder(dtype=tf.float32, shape=[None, n_action])
     # create variables
-    W0 = tf.get_variable(name='W0', shape=[n_observation, 64], initializer=tf.contrib.layers.xavier_initializer())
+    W0 = tf.get_variable(name='W0', shape=[n_observation, 32], initializer=tf.contrib.layers.xavier_initializer())
     wd = tf.nn.l2_loss(W0)*regularization
     tf.add_to_collection("weight_decay",wd)
-    W1 = tf.get_variable(name='W1', shape=[64, n_action], initializer=tf.contrib.layers.xavier_initializer())
+    W1 = tf.get_variable(name='W1', shape=[32, 32], initializer=tf.contrib.layers.xavier_initializer())
     wd = tf.nn.l2_loss(W1)*regularization
+    tf.add_to_collection("weight_decay",wd)
+    W2 = tf.get_variable(name='W2', shape=[32, n_action], initializer=tf.contrib.layers.xavier_initializer())
+    wd = tf.nn.l2_loss(W2)*regularization
     tf.add_to_collection("weight_decay",wd)    
     
-    b0 = tf.get_variable(name='b0', shape=[64], initializer=tf.constant_initializer(0.))
-    b1 = tf.get_variable(name='b1', shape=[n_action], initializer=tf.constant_initializer(0.))
+    b0 = tf.get_variable(name='b0', shape=[32], initializer=tf.constant_initializer(0.))
+    b1 = tf.get_variable(name='b1', shape=[32], initializer=tf.constant_initializer(0.))
+    b2 = tf.get_variable(name='b2', shape=[n_action], initializer=tf.constant_initializer(0.))
     
-    weights = [W0, W1]
-    biases = [b0, b1]
-    activations = [tf.nn.relu, None]
+    weights = [W0, W1, W2]
+    biases = [b0, b1, b2]
+    activations = [tf.nn.relu, tf.nn.relu, None]
     
     # create computation graph
     layer = input_ph
@@ -107,7 +111,7 @@ sess = tf_reset()
 input_ph, output_ph, output_pred = create_model(n_observation,n_action,0.01)
 
 if Train_Restore ==0:    
-    tf_training(actions_expert_processed,observations_expert_processed,2000,sess,input_ph, output_ph, output_pred)
+    tf_training(actions_expert_processed,observations_expert_processed,4000,sess,input_ph, output_ph, output_pred)
 elif Train_Restore == 1:
     saver = tf.train.Saver()
     saver.restore(sess, "trainingresults/hopper.ckpt")
