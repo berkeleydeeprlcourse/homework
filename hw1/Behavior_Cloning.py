@@ -26,14 +26,14 @@ def create_model(n_observation,n_action,regularization):
     input_ph = tf.placeholder(dtype=tf.float32, shape=[None, n_observation])
     output_ph = tf.placeholder(dtype=tf.float32, shape=[None, n_action])
     # create variables
-    W0 = tf.get_variable(name='W0', shape=[n_observation, 128], initializer=tf.contrib.layers.xavier_initializer())
+    W0 = tf.get_variable(name='W0', shape=[n_observation, 64], initializer=tf.contrib.layers.xavier_initializer())
     wd = tf.nn.l2_loss(W0)*regularization
     tf.add_to_collection("weight_decay",wd)
-    W1 = tf.get_variable(name='W1', shape=[128, n_action], initializer=tf.contrib.layers.xavier_initializer())
+    W1 = tf.get_variable(name='W1', shape=[64, n_action], initializer=tf.contrib.layers.xavier_initializer())
     wd = tf.nn.l2_loss(W1)*regularization
     tf.add_to_collection("weight_decay",wd)    
     
-    b0 = tf.get_variable(name='b0', shape=[128], initializer=tf.constant_initializer(0.))
+    b0 = tf.get_variable(name='b0', shape=[64], initializer=tf.constant_initializer(0.))
     b1 = tf.get_variable(name='b1', shape=[n_action], initializer=tf.constant_initializer(0.))
     
     weights = [W0, W1]
