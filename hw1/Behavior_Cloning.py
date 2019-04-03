@@ -85,7 +85,7 @@ def tf_training(actions,observations,n_steps,sess,input_ph, output_ph, output_pr
     
 #def main(envname,Train_Restore):
 envname = "Hopper-v2"
-Train_Restore = 0
+Train_Restore = 1
 
 with open(os.path.join('expert_data', envname + '.pkl'), 'rb') as f:
     data_from_expert = pickle.load(f)
@@ -133,8 +133,7 @@ elif Train_Restore == 1:
 #env.render()
 #env.close()
 
-prediction = sess.run(output_pred, feed_dict={input_ph: np.array([[1.2494,\
-    -0.00354982,-0.00284883,0.00154274,0.00223747,0.0376482,-0.112478,0.0892891,0.0436803,0.0247838,1.44408]])})
+prediction = sess.run(output_pred, feed_dict={input_ph: np.reshape(observations_expert_processed[0,:],(1,n_observation))})
 print(prediction)
 
 #main('Hopper-v2',0)
