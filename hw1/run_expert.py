@@ -3,7 +3,7 @@
 """
 Code to load an expert policy and generate roll-out data for behavioral cloning.
 Example usage:
-    python run_expert.py experts/Hopper-v2.pkl Hopper-v2 --render --num_rollouts 2
+    python run_expert.py experts/Hopper-v2.pkl Hopper-v2 --render --num_rollouts 5
 
 Author of this script and included expert policies: Jonathan Ho (hoj@openai.com)
 """
@@ -34,7 +34,6 @@ def main():
     with tf.Session():
         tf_util.initialize()
 
-        import gym
         env = gym.make(args.envname)
         max_steps = args.max_timesteps or env.spec.timestep_limit
 
@@ -49,7 +48,7 @@ def main():
             steps = 0
             while not done:
                 action = policy_fn(obs[None,:])
-                observations.append(obs)
+                observations.append([obs])
                 actions.append(action)
                 obs, r, done, _ = env.step(action)
                 totalr += r

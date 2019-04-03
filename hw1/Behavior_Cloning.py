@@ -25,14 +25,14 @@ def create_model(n_observation,n_action,regularization):
     input_ph = tf.placeholder(dtype=tf.float32, shape=[None, n_observation])
     output_ph = tf.placeholder(dtype=tf.float32, shape=[None, 1, n_action])
     # create variables
-    W0 = tf.get_variable(name='W0', shape=[n_observation, 120], initializer=tf.contrib.layers.xavier_initializer())
+    W0 = tf.get_variable(name='W0', shape=[n_observation, 128], initializer=tf.contrib.layers.xavier_initializer())
     wd = tf.nn.l2_loss(W0)*regularization
     tf.add_to_collection("weight_decay",wd)
-    W1 = tf.get_variable(name='W1', shape=[120, n_action], initializer=tf.contrib.layers.xavier_initializer())
+    W1 = tf.get_variable(name='W1', shape=[128, n_action], initializer=tf.contrib.layers.xavier_initializer())
     wd = tf.nn.l2_loss(W1)*regularization
     tf.add_to_collection("weight_decay",wd)    
     
-    b0 = tf.get_variable(name='b0', shape=[120], initializer=tf.constant_initializer(0.))
+    b0 = tf.get_variable(name='b0', shape=[128], initializer=tf.constant_initializer(0.))
     b1 = tf.get_variable(name='b1', shape=[n_action], initializer=tf.constant_initializer(0.))
     
     weights = [W0, W1]
@@ -85,7 +85,7 @@ def tf_training(actions,observations,n_steps,sess,input_ph, output_ph, output_pr
     
 #def main(envname,Train_Restore):
 envname = "Hopper-v2"
-Train_Restore = 0
+Train_Restore = 1
 
 with open(os.path.join('expert_data', envname + '.pkl'), 'rb') as f:
     data_from_expert = pickle.load(f)
