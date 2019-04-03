@@ -89,7 +89,7 @@ def tf_training(actions,observations,n_steps,sess,input_ph, output_ph, output_pr
     
 #def main(envname,Train_Restore):
 envname = "Hopper-v2"
-Train_Restore = 0
+Train_Restore = 1
 
 with open(os.path.join('expert_data', envname + '.pkl'), 'rb') as f:
     data_from_expert = pickle.load(f)
@@ -98,15 +98,18 @@ actions_expert = data_from_expert['actions']
 observations_expert = np.float32(data_from_expert['observations'])
 
 # Normalize the input and output
-actions_expert_processed = np.divide((actions_expert-np.mean(actions_expert,0)),np.std(actions_expert,0))
-observations_expert_processed = np.divide((observations_expert-np.mean(observations_expert,0)),np.std(observations_expert,0))
+action_mean = np.mean(actions_expert,0)
+action_std = np.std(actions_expert,0)
+obs_mean = np.mean(observations_expert,0)
+obs_std = np.std(observations_expert,0)
+actions_expert_processed = np.divide((actions_expert-action_mean),action_std)
+observations_expert_processed = np.divide((observations_expert-obs_mean),obs_std)
 
 # Get the size of the problem
 n_action = actions_expert.shape[1]
 n_observation = observations_expert.shape[1]
 
 sess = tf_reset() 
-
 
 input_ph, output_ph, output_pred = create_model(n_observation,n_action,0.01)
 
@@ -116,31 +119,31 @@ elif Train_Restore == 1:
     saver = tf.train.Saver()
     saver.restore(sess, "trainingresults/hopper.ckpt")
 
-#env = gym.make(envname)
-#max_steps = env.spec.timestep_limit
-#observations = np.zeros(shape=(1,11))
-#actions = np.zeros(shape=(1,3))
-#
-#obs = env.reset()
-#obs = np.reshape(obs,(1,11))
-#done = False
-#totalr = 0.
-#steps = 0
-#while not done:
-#    action = sess.run(output_pred, feed_dict={input_ph:obs})
-#    observations = np.append(observations,obs,axis = 0)
-#    actions = np.append(actions,action,axis = 0)
-#    obs, r, done, _ = env.step(action)
-#    obs = np.reshape(obs,(1,11))
-#    totalr += r
-#    steps += 1
+env = gym.make(envname)
+max_steps = env.spec.timestep_limit
+observations = np.zeros(shape=(1,11))
+actions = np.zeros(shape=(1,3))
+
+obs_normalized = np.divide((np.reshape(env.reset(),(1,n_observation))-obs_mean),obs_std)
+done = False
+totalr = 0.
+steps = 0
+while not done:
+    action_normalized = np.reshape(sess.run(output_pred, feed_dict={input_ph:obs_normalized}),(1,n_action))
+    action = np.multiply(action_normalized,action_std)+action_mean
+    obs = np.multiply(obs_normalized,obs_std)+obs_mean
+    observations = np.append(observations,obs,axis = 0)
+    actions = np.append(actions,action,axis = 0)
+    obs, r, done, _ = env.step(action)
+    obs_normalized = np.divide(np.reshape(obs,(1,n_observation))-obs_mean,obs_std)
+    totalr += r
+    steps += 1
 #    env.render()
-#    if steps % 100 == 0: print("%i/%i"%(steps, max_steps))
-#    if steps >= max_steps:
-#        break
-#print(totalr)
-#env.render()
-#env.close()
+    if steps % 100 == 0: print("%i/%i"%(steps, max_steps))
+    if steps >= max_steps:
+        break
+print(totalr)
+env.close()
 
 prediction = sess.run(output_pred, feed_dict={input_ph: np.reshape(observations_expert_processed[0,:],(1,n_observation))})
 print(prediction)
