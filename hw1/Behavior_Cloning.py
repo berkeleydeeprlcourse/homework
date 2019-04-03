@@ -54,7 +54,7 @@ def tf_training(actions,observations,n_steps,sess,input_ph, output_ph, output_pr
 #    sess = tf.Session()
     # create loss
     mse = tf.reduce_mean(0.5 * tf.square(output_pred - output_ph))
-    weight_decay_loss = tf.get_collection("weght_decay")
+    weight_decay_loss = tf.reduce_mean(tf.get_collection("weight_decay"))
     total_loss = mse+weight_decay_loss
     # create optimizer
     opt = tf.train.AdamOptimizer().minimize(total_loss)
@@ -76,7 +76,7 @@ def tf_training(actions,observations,n_steps,sess,input_ph, output_ph, output_pr
         # print the mse every so often
         if training_step % 10 == 0:
             print('{0:04d} mse: {1:.3f}'.format(training_step, mse_run))
-            save_path = saver.save(sess, 'trainingresults/ant.ckpt')
+            save_path = saver.save(sess, 'trainingresults/hopper.ckpt')
             
     print("Model saved in path: %s" % save_path)
     summary_writer = tf.summary.FileWriter("/tmp/logs", sess.graph)
@@ -85,13 +85,13 @@ def tf_training(actions,observations,n_steps,sess,input_ph, output_ph, output_pr
     
 #def main(envname,Train_Restore):
 envname = "Hopper-v2"
-Train_Restore = 1
+Train_Restore = 0
 
 with open(os.path.join('expert_data', envname + '.pkl'), 'rb') as f:
     data_from_expert = pickle.load(f)
 
 actions_expert = data_from_expert['actions']
-observations_expert = data_from_expert['observations']
+observations_expert = np.float32(data_from_expert['observations'])
 actions_expert_processed = np.divide((actions_expert-np.mean(actions_expert,0)),np.std(actions_expert,0))
 observations_expert_processed = np.divide((observations_expert-np.mean(observations_expert,0)),np.std(observations_expert,0))
 
@@ -102,7 +102,7 @@ n_observation = observations_expert.shape[1]
 input_ph, output_ph, output_pred = create_model(n_observation,n_action,0.001)
 
 if Train_Restore ==0:    
-    tf_training(actions_expert_processed,observations_expert_processed,800,sess,input_ph, output_ph, output_pred)
+    tf_training(actions_expert_processed,observations_expert_processed,2000,sess,input_ph, output_ph, output_pred)
 elif Train_Restore == 1:
     saver = tf.train.Saver()
     saver.restore(sess, "trainingresults/hopper.ckpt")

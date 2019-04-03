@@ -1,2 +1,2 @@
-model_checkpoint_path: "ant.ckpt"
-all_model_checkpoint_paths: "ant.ckpt"
+model_checkpoint_path: "hopper.ckpt"
+all_model_checkpoint_paths: "hopper.ckpt"
