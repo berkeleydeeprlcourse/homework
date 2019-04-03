@@ -23,7 +23,7 @@ def tf_reset():
 def create_model(n_observation,n_action,regularization):
     # create inputs
     input_ph = tf.placeholder(dtype=tf.float32, shape=[None, n_observation])
-    output_ph = tf.placeholder(dtype=tf.float32, shape=[None, 1, n_action])
+    output_ph = tf.placeholder(dtype=tf.float32, shape=[None, n_action])
     # create variables
     W0 = tf.get_variable(name='W0', shape=[n_observation, 128], initializer=tf.contrib.layers.xavier_initializer())
     wd = tf.nn.l2_loss(W0)*regularization
@@ -96,7 +96,7 @@ actions_expert_processed = np.divide((actions_expert-np.mean(actions_expert,0)),
 observations_expert_processed = np.divide((observations_expert-np.mean(observations_expert,0)),np.std(observations_expert,0))
 
 sess = tf_reset() 
-n_action = actions_expert.shape[2]
+n_action = actions_expert.shape[1]
 n_observation = observations_expert.shape[1]
 
 input_ph, output_ph, output_pred = create_model(n_observation,n_action,0.001)

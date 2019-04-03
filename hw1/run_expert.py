@@ -47,8 +47,8 @@ def main():
             totalr = 0.
             steps = 0
             while not done:
-                action = policy_fn(obs[None,:])
-                observations.append([obs])
+                action = np.squeeze(policy_fn(obs[None,:]))
+                observations.append(obs)
                 actions.append(action)
                 obs, r, done, _ = env.step(action)
                 totalr += r
@@ -73,3 +73,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+    
