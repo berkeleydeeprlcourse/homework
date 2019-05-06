@@ -25,3 +25,57 @@ In `experts/`, the provided expert policies are:
 * Walker2d-v2.pkl
 
 The name of the pickle file corresponds to the name of the gym environment.
+
+### Added Roboschool environment
+Additional roboschool models were added with policies from the Roboschool agent zoo (https://github.com/openai/roboschool).
+This code was rebased over Alex Hofer <rofer@google.com> code.
+
+Additional policies in the `experts/` directory:
+* RoboschoolAnt-v1.py
+* RoboschoolHalfCheetah-v1.py
+* RoboschoolHopper-v1.py
+* RoboschoolHumanoid-v1.py
+* RoboschoolReacher-v1.py
+* RoboschoolWalker2d-v1.py
+
+# Running Environment
+- The required python packages are listed [here](requirements.txt).
+- You can either run the code on a docker container ([Dockerfile](../Dockerfile)) or install the package on a virtual environment.
+- Note that if running in a docker container, you won't be able to render the environment (without additional configuration).
+### Installing a virtual env
+```
+# Create a virtual environment
+virtualenv -p /usr/local/bin/python3 venv
+
+# activate and install packages
+source venv/bin/activate
+pip install -r hw1/requirements.txt
+```
+
+### Running in a docker container
+The Docker file includes the relevant packages (gym, tensorflow, roboschool).
+You can either build it yourself, or use my prebuilt image on Dockerhub: `rbahumi/cs294_roboschool_image`
+
+#### Docker run command:
+1. Run a docker instance in the background
+2. Open port 8888 to jupter notebook
+3. Map the current user to the docker's filesystem
+```
+docker run -d --name CS294_docker -p 8888:8888 -u $(id -u):$(id -g) -v $(pwd):/tf/srv -it rbahumi/cs294_roboschool_image
+```
+#### Get the jupyter-notebook token
+```
+docker exec -it CS294_docker jupyter-notebook list
+```
+#### Login to the running docker container instance:
+```
+docker exec -it CS294_docker bash
+```
+
+#### Building the docker image
+If you with to build the docker container yourself, maybe starting from a different/gpu Tensorflow image, run the following command:
+```
+# Build the docker
+cd hw1
+docker build -t cs294_roboschool_image -f Dockerfile .
+```

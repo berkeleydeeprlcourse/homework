@@ -1,5 +1,10 @@
-gym==0.10.5
+# On OSX need to run 'brew install swig' before installing the following pip packages
 mujoco-py==1.50.1.56
-tensorflow
-numpy
+roboschool==1.0.46
+gym[all]==0.10.5
 seaborn
+cmake==3.13.3
+sklearn
+tensorflow
+keras==2.2.4
+pydot==1.4.1
