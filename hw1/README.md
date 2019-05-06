@@ -25,3 +25,15 @@ In `experts/`, the provided expert policies are:
 * Walker2d-v2.pkl
 
 The name of the pickle file corresponds to the name of the gym environment.
+
+### Added Roboschool environment
+Additional roboschool models were added with policies from the Roboschool agent zoo (https://github.com/openai/roboschool).
+This code was rebased over Alex Hofer <rofer@google.com> code.
+
+Additional policies in the `experts/` directory:
+* RoboschoolAnt-v1.py
+* RoboschoolHalfCheetah-v1.py
+* RoboschoolHopper-v1.py
+* RoboschoolHumanoid-v1.py
+* RoboschoolReacher-v1.py
+* RoboschoolWalker2d-v1.py
