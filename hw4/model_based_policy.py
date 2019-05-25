@@ -172,9 +172,12 @@ class ModelBasedPolicy(object):
         assert np.shape(state) == (self._state_dim,)
         assert np.shape(action) == (self._action_dim,)
 
-        ### PROBLEM 1
-        ### YOUR CODE HERE
-        raise NotImplementedError
+        feed_dict = {
+            self._state_ph: state,
+            self._action_ph: action
+        }
+
+        next_state_pred = self._sess.run(self._next_state_pred, feed_dict)
 
         assert np.shape(next_state_pred) == (self._state_dim,)
         return next_state_pred
