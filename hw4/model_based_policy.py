@@ -132,17 +132,21 @@ class ModelBasedPolicy(object):
 
         The variables returned will be set as class attributes (see __init__)
         """
-        sess = tf.Session()
-
+            
         ### PROBLEM 1
         ### YOUR CODE HERE
-        raise NotImplementedError
+        tf.reset_default_graph()
+            
+        sess = tf.Session()
+        state_ph, action_ph, next_state_ph = _setup_placeholders()
+        next_state_pred = _dynamics_func()
+        loss, optimizer = _setup_training(state_ph, next_state_ph, next_state_pred)
+        best_action = _setup_action_selection()
+        sess.run(tf.global_variables_initializer())
+                
         ### PROBLEM 2
         ### YOUR CODE HERE
-        best_action = None
-
-        sess.run(tf.global_variables_initializer())
-
+        
         return sess, state_ph, action_ph, next_state_ph, \
                 next_state_pred, loss, optimizer, best_action
 
