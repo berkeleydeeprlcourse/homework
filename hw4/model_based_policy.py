@@ -97,7 +97,6 @@ class ModelBasedPolicy(object):
 
         loss = tf.reduce_mean(tf.losses.mean_squared_error(diff_actual_normalized, diff_pred_normalized))
         optimizer = tf.train.AdamOptimizer(learning_rate= self._learning_rate).minimize(loss)
-        raise NotImplementedError
 
         return loss, optimizer
 
