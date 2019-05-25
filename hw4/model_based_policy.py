@@ -65,7 +65,33 @@ class ModelBasedPolicy(object):
         """
         ### PROBLEM 1
         ### YOUR CODE HERE
-        raise NotImplementedError
+        state_ = utils.normalize(
+            x=state,
+            mean=self._init_dataset.state_mean,
+            std=self._init_dataset.state_std
+        )
+        action_ = utils.normalize(
+            x=action,
+            mean=self._init_dataset.action_mean,
+            std=self._init_dataset.action_std
+        )
+        input_ = tf.concat(
+            values=[state_, action_],
+            axis=-1
+        )
+        residual = utils.build_mlp(
+            input_layer=input_,
+            output_dim=self._state_dim,
+            scope="dynamics",
+            n_layers=self._nn_layers,
+            reuse=reuse
+        )
+        residual = utils.unnormalize(
+            x=residual,
+            mean=self._init_dataset.delta_state_mean,
+            std=self._init_dataset.delta_state_std
+        )
+        next_state_pred = state + residual
 
         return next_state_pred
 
