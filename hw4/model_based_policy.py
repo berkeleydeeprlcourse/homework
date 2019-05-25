@@ -172,9 +172,11 @@ class ModelBasedPolicy(object):
         assert np.shape(state) == (self._state_dim,)
         assert np.shape(action) == (self._action_dim,)
 
+        ### PROBLEM 1
+        ### YOUR CODE HERE
         feed_dict = {
-            self._state_ph: state,
-            self._action_ph: action
+            self._state_ph: tf.expand_dims(state, 0),
+            self._action_ph: tf.expand_dims(action, 0)
         }
 
         next_state_pred = self._sess.run(self._next_state_pred, feed_dict)
