@@ -135,9 +135,8 @@ class ModelBasedPolicy(object):
             
         ### PROBLEM 1
         ### YOUR CODE HERE
-        tf.reset_default_graph()
-            
         sess = tf.Session()
+        tf.reset_default_graph()            
         state_ph, action_ph, next_state_ph = _setup_placeholders()
         next_state_pred = _dynamics_func()
         loss, optimizer = _setup_training(state_ph, next_state_ph, next_state_pred)
