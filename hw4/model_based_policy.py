@@ -11,7 +11,7 @@ class ModelBasedPolicy(object):
                  init_dataset,
                  horizon=15,
                  num_random_action_selection=4096,
-                 nn_layers=1):
+                 nn_layers=
         self._cost_fn = env.cost_fn
         self._state_dim = env.observation_space.shape[0]
         self._action_dim = env.action_space.shape[0]
@@ -41,8 +41,9 @@ class ModelBasedPolicy(object):
         """
         ### PROBLEM 1
         ### YOUR CODE HERE
-        raise NotImplementedError
-
+        state_ph = tf.placeholders(shape=(None, self._state_dim), dtype=tf.float64, name='current_state')
+        action_ph = tf.placeholders(shape=(None, self._action_dim), dtype=tf.float64, name='current_action')
+        next_state_ph = tf.placeholders(shape=(None, self._state_dim), dtype=tf.float64, name='next_state')
         return state_ph, action_ph, next_state_ph
 
     def _dynamics_func(self, state, action, reuse):
