@@ -41,8 +41,9 @@ class ModelBasedPolicy(object):
         """
         ### PROBLEM 1
         ### YOUR CODE HERE
-        raise NotImplementedError
-
+        state_ph = tf.placeholders(shape=(None, self._state_dim), dtype=tf.float64, name='current_state')
+        action_ph = tf.placeholders(shape=(None, self._action_dim), dtype=tf.float64, name='current_action')
+        next_state_ph = tf.placeholders(shape=(None, self._state_dim), dtype=tf.float64, name='next_state')
         return state_ph, action_ph, next_state_ph
 
     def _dynamics_func(self, state, action, reuse):
