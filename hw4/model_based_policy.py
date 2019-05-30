@@ -135,14 +135,14 @@ class ModelBasedPolicy(object):
             
         ### PROBLEM 1
         ### YOUR CODE HERE
-        sess = tf.Session()          
+        sess = tf.Session()   
         state_ph, action_ph, next_state_ph = self._setup_placeholders()
         next_state_pred = self._dynamics_func()
         loss, optimizer = self._setup_training(state_ph, next_state_ph, next_state_pred)
-        best_action = self._setup_action_selection()
-                
+                       
         ### PROBLEM 2
         ### YOUR CODE HERE
+        best_action = self._setup_action_selection()
         
         sess.run(tf.global_variables_initializer())
 
