@@ -182,8 +182,13 @@ class ModelBasedPolicy(object):
         """
         ### PROBLEM 1
         ### YOUR CODE HERE
-        raise NotImplementedError
-
+        next_state_pred = self._sess.run([self._next_state_pred],
+                                         feed_dict={self._action_ph: actions,
+                                                    self._state_ph: states})
+        loss, _ = self._sess.run([self._loss, self._optimizer],
+                                 feed_dict={self._state_ph: states,
+                                            self._next_state_ph: next_states,
+                                            self._next_state_pred: next_state_pred})
         return loss
 
     def predict(self, state, action):
