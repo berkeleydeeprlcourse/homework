@@ -142,7 +142,7 @@ class ModelBasedPolicy(object):
                        
         ### PROBLEM 2
         ### YOUR CODE HERE
-        best_action = self._setup_action_selection()
+        best_action = None
         
         sess.run(tf.global_variables_initializer())
 
