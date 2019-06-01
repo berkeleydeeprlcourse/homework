@@ -116,7 +116,14 @@ class ModelBasedPolicy(object):
         """
         ### PROBLEM 1
         ### YOUR CODE HERE
-        raise NotImplementedError
+        diff_actual = state_ph - next_state_ph
+        diff_pred = state_ph - next_state_pred
+
+        diff_actual_normalized = utils.normalize(diff_actual, self._init_dataset.delta_state_mean, self._init_dataset.delta_state_std)
+        diff_pred_normalized = utils.normalize(diff_pred, self._init_dataset.delta_state_mean, self._init_dataset.delta_state_std)
+
+        loss = tf.reduce_mean(tf.losses.mean_squared_error(diff_actual_normalized, diff_pred_normalized))
+        optimizer = tf.train.AdamOptimizer(learning_rate= self._learning_rate).minimize(loss)
 
         return loss, optimizer
 
