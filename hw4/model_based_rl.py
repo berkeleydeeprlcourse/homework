@@ -164,7 +164,7 @@ class ModelBasedRL(object):
         logger.info('Evaluating policy...')
         ### PROBLEM 2
         ### YOUR CODE HERE
-
+        eval_dataset = self._gather_rollouts(self.policy, self.num_onpolicy_rollouts)
 
         logger.info('Trained policy')
         self._log(eval_dataset)
