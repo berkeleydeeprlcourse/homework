@@ -237,7 +237,7 @@ class ModelBasedPolicy(object):
 
         ### PROBLEM 2
         ### YOUR CODE HERE
-        raise NotImplementedError
+        best_action = self._sess(self._best_action, feed_dict={self._state_ph: state})
 
         assert np.shape(best_action) == (self._action_dim,)
         return best_action
