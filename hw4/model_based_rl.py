@@ -25,7 +25,7 @@ class ModelBasedRL(object):
                  nn_layers=1):
         self._env = env
         self._max_rollout_length = max_rollout_length
-        self._num_onpolicy_iters = num_onplicy_iters
+        self._num_onpo_train_policylicy_iters = num_onplicy_iters
         self._num_onpolicy_rollouts = num_onpolicy_rollouts
         self._training_epochs = training_epochs
         self._training_batch_size = training_batch_size
@@ -159,12 +159,12 @@ class ModelBasedRL(object):
         logger.info('Training policy....')
         ### PROBLEM 2
         ### YOUR CODE HERE
-        raise NotImplementedError
+        self._train_policy(self._random_dataset)
 
         logger.info('Evaluating policy...')
         ### PROBLEM 2
         ### YOUR CODE HERE
-        raise NotImplementedError
+
 
         logger.info('Trained policy')
         self._log(eval_dataset)

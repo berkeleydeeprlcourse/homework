@@ -208,7 +208,7 @@ class ModelBasedPolicy(object):
         returns:
             next_state_pred: predicted next state
 
-        implementation detils:
+        implementation details:
             (i) The state and action arguments are 1-dimensional vectors (NO batch dimension)
         """
         assert np.shape(state) == (self._state_dim,)
