@@ -206,7 +206,12 @@ class ModelBasedPolicy(object):
 
         ### PROBLEM 1
         ### YOUR CODE HERE
-        raise NotImplementedError
+        feed_dict = {
+            self._state_ph: tf.expand_dims(state, 0),
+            self._action_ph: tf.expand_dims(action, 0)
+        }
+
+        next_state_pred = self._sess.run(self._next_state_pred, feed_dict)
 
         assert np.shape(next_state_pred) == (self._state_dim,)
         return next_state_pred
