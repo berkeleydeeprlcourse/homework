@@ -206,7 +206,7 @@ class ModelBasedPolicy(object):
 
         ### PROBLEM 2
         ### YOUR CODE HERE
-        best_action = None
+        best_action = self._setup_action_selection(state_ph=state_ph)
 
         sess.run(tf.global_variables_initializer())
 
