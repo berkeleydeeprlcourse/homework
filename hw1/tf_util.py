@@ -491,3 +491,5 @@ def reset():
     _PLACEHOLDER_CACHE = {}
     VARIABLES = {}
     tf.reset_default_graph()
+#excuse me
+#I have to trying to do a Pull request for homework
