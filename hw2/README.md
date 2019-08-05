@@ -14,3 +14,17 @@ Before doing anything, first replace `gym/envs/box2d/lunar_lander.py` with the p
 The only file that you need to look at is `train_pg_f18.py`, which you will implement.
 
 See the [HW2 PDF](http://rail.eecs.berkeley.edu/deeprlcourse/static/homeworks/hw2.pdf) for further instructions.
+
+
+## Running trained agent
+After running `train_pg_f18.py` with a specific setting (gym environment, metaprameters) a new directory will 
+be added under `data` with the following structure:
+```
+args.exp_name + '_' + args.env_name + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
+```
+Under this directory, there are multiple (exact number is set by 'n_experiments' param) trained agents. 
+In order to visualize (render) these agents behavior, run the `run_agent.py` script and specify the number of iterations (-n option). For example:
+```bash
+# Run 3 iterations of a agent number 1 of 
+python run_agent.py "data/hc_b4000_r0.01_RoboschoolInvertedPendulum-v1_21-07-2019_08-42-10/1" -n 3
+```
