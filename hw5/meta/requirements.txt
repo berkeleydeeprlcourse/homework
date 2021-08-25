@@ -1,6 +1,6 @@
 mujoco-py==1.50.1.56
 gym==0.10.5
-tensorflow==1.10.0
+tensorflow==2.5.1
 numpy==1.14.5
 scipy==1.1.0
 tensorflow-probability==0.3.0
